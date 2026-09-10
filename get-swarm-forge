@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-default_repo_url="https://github.com/unclebob/swarm-forge"
+default_repo_url="https://github.com/marybel/swarm-forge"
 pack_names=(two-pack four-pack six-pack)
 
 usage() {
@@ -53,15 +53,15 @@ try_download_branch() {
   local tar_path="$tmp_dir/${ref}.tgz"
   local git_dir
   mkdir -p "$dest"
-  if curl -fsSL "$url" -o "$tar_path"; then
-    tar -xz --strip-components=1 -C "$dest" -f "$tar_path"
-    return 0
-  fi
   git_dir="$(local_git_dir)"
   if [[ -n "$git_dir" && -d "$git_dir/.git" ]] \
        && git -C "$git_dir" show-ref --verify --quiet "refs/heads/$ref"; then
     echo "get-swarm-forge: GitHub has no branch '$ref'; using $git_dir" >&2
     git -C "$git_dir" archive --format=tar "$ref" | tar -x -C "$dest"
+    return 0
+  fi
+  if curl -fsSL "$url" -o "$tar_path"; then
+    tar -xz --strip-components=1 -C "$dest" -f "$tar_path"
     return 0
   fi
   return 1
