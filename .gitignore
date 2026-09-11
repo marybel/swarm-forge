@@ -2,7 +2,11 @@
 .env
 .claude/
 .cpcache/
+.clj-kondo/.cache/
+.lsp/.cache/
 .superpowers/
+.swarmforge/
+.worktrees/
 target/
 node_modules/
 test-results/
