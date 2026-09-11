@@ -2,6 +2,8 @@
 .env
 .claude/
 .cpcache/
+.clj-kondo/.cache/
+.lsp/.cache/
 .superpowers/
 .swarmforge/
 .worktrees/
