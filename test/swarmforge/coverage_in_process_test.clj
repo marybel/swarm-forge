@@ -268,7 +268,14 @@
   (is (swarmforge/skip-config-line? "# hi"))
   (is (swarmforge/skip-config-line? ""))
   (is (not (swarmforge/special-worktree? "coder")))
-  (is (some? (swarmforge/sleep-inhibitor-prefix))))
+  (let [result (swarmforge/sleep-inhibitor-prefix)]
+    (case (swarmforge/uname)
+      "Darwin" (is (= (some? result) (boolean (swarmforge/command-exists? "caffeinate"))))
+      "Linux" (is (= (some? result)
+                     (boolean (and (swarmforge/command-exists? "systemd-inhibit")
+                                   (swarmforge/command-exists? "systemctl")
+                                   (swarmforge/linux-systemd-running?)))))
+      (is (nil? result)))))
 
 (deftest pack-board-helpers
   (is (= "hello" (pack-board/slug "Hello!")))
