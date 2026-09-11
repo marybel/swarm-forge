@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .claude/
+.clj-kondo/.cache/
+.lsp/.cache/
 .swarmforge/
 .worktrees/
 swarmforge/scripts/
