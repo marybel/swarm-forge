@@ -4,3 +4,7 @@
 .swarmforge/
 .worktrees/
 swarmforge/scripts/
+.clj-kondo/.cache/
+.lsp/.cache/
+test/dashboard/node_modules/
+test/dashboard/test-results/
