@@ -205,6 +205,7 @@
      :roles-dir (fs/path swarm-forge-dir "roles")
      :constitution-file (fs/path swarm-forge-dir "constitution.prompt")
      :state-dir state-dir
+     :logs-dir (fs/path state-dir "logs")
      :notify-dir (fs/path state-dir "notify")
      :window-ids-file (fs/path state-dir "window-ids")
      :window-state-file (fs/path state-dir "windows.tsv")
@@ -281,7 +282,7 @@
       (launch-role! ctx index row))))
 
 (defn pane-log-file-for [ctx role]
-  (fs/path (:state-dir ctx) "logs" (str role ".log")))
+  (fs/path (:logs-dir ctx) (str role ".log")))
 
 (defn boot-sessions! [ctx]
   (println (str cyan bold))
