@@ -179,11 +179,13 @@
                (assoc-in config ["projects" dir-key]
                          (assoc project "hasTrustDialogAccepted" true))))))))
 
+(def ensure-agent-trust-fns
+  {"codex" ensure-codex-trust!
+   "claude" ensure-claude-trust!})
+
 (defn launch-role! [ctx index row]
-  (when (= "codex" (:agent row))
-    (ensure-codex-trust! (:worktree-path row)))
-  (when (= "claude" (:agent row))
-    (ensure-claude-trust! (:worktree-path row)))
+  (when-let [ensure-trust! (ensure-agent-trust-fns (:agent row))]
+    (ensure-trust! (:worktree-path row)))
   (let [session (:session row)
         display (:display-name row)
         command (launch-command ctx index row)]
