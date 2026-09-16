@@ -162,9 +162,28 @@
               (str (ensure-newline text)
                    "\n" header "\ntrust_level = \"trusted\"\n"))))))
 
+(defn claude-config-file []
+  (or (not-empty (System/getenv "CLAUDE_CONFIG_FILE"))
+      (str (fs/path (System/getProperty "user.home") ".claude.json"))))
+
+(defn ensure-claude-trust! [dir]
+  (when-not (str/blank? (str dir))
+    (let [cfg (claude-config-file)
+          dir-key (str (fs/absolutize dir))
+          config (if (fs/exists? cfg) (json/parse-string (slurp cfg)) {})
+          project (get-in config ["projects" dir-key] {})]
+      (when-not (get project "hasTrustDialogAccepted")
+        (fs/create-dirs (fs/parent cfg))
+        (spit (str cfg)
+              (json/generate-string
+               (assoc-in config ["projects" dir-key]
+                         (assoc project "hasTrustDialogAccepted" true))))))))
+
 (defn launch-role! [ctx index row]
   (when (= "codex" (:agent row))
     (ensure-codex-trust! (:worktree-path row)))
+  (when (= "claude" (:agent row))
+    (ensure-claude-trust! (:worktree-path row)))
   (let [session (:session row)
         display (:display-name row)
         command (launch-command ctx index row)]

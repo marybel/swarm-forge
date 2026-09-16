@@ -3,6 +3,7 @@
 (ns swarmforge
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
+            [cheshire.core :as json]
             [clojure.string :as str]))
 
 (def session-prefix "swarmforge")
@@ -471,6 +472,9 @@
 (defn test-ensure-codex-trust! [dir]
   (ensure-codex-trust! dir))
 
+(defn test-ensure-claude-trust! [dir]
+  (ensure-claude-trust! dir))
+
 (defn test-reset-pack-web-state! [root]
   (let [ctx (context root)]
     (fs/create-dirs (:state-dir ctx))
@@ -496,6 +500,7 @@
     "--test-agent-start-delay" (println (env-long "SWARMFORGE_AGENT_START_DELAY_MS" 1500))
     "--test-sleep-inhibitor-prefix" (test-sleep-inhibitor-prefix!)
     "--test-ensure-codex-trust" (test-ensure-codex-trust! (second args))
+    "--test-ensure-claude-trust" (test-ensure-claude-trust! (second args))
     "--test-reset-pack-web-state" (test-reset-pack-web-state! (second args))
     "--test-tmux-base-indexes" (test-tmux-base-indexes! (second args))
     "--test-create-role-session" (test-create-role-session! (second args) (nth args 2) (nth args 3))
