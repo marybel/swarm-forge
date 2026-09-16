@@ -3,6 +3,7 @@
 (ns swarmforge
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
+            [cheshire.core :as json]
             [clojure.string :as str]))
 
 (def session-prefix "swarmforge")
@@ -570,9 +571,28 @@
               (str (ensure-newline text)
                    "\n" header "\ntrust_level = \"trusted\"\n"))))))
 
+(defn claude-config-file []
+  (fs/path (or (not-empty (System/getenv "HOME"))
+               (System/getProperty "user.home"))
+           ".claude.json"))
+
+(defn ensure-claude-trust! [dir]
+  (when-not (str/blank? (str dir))
+    (let [cfg (claude-config-file)
+          path (str (fs/absolutize dir))
+          data (if (fs/exists? cfg) (json/parse-string (slurp (str cfg))) {})]
+      (when-not (true? (get-in data ["projects" path "hasTrustDialogAccepted"]))
+        (fs/create-dirs (fs/parent cfg))
+        (spit (str cfg)
+              (json/generate-string
+                (assoc-in data ["projects" path "hasTrustDialogAccepted"] true)
+                {:pretty true}))))))
+
 (defn launch-role! [ctx index row]
   (when (= "codex" (:agent row))
     (ensure-codex-trust! (:worktree-path row)))
+  (when (= "claude" (:agent row))
+    (ensure-claude-trust! (:worktree-path row)))
   (let [session (:session row)
         display (:display-name row)
         command (launch-command ctx index row)]
@@ -1048,6 +1068,9 @@
 (defn test-ensure-codex-trust! [dir]
   (ensure-codex-trust! dir))
 
+(defn test-ensure-claude-trust! [dir]
+  (ensure-claude-trust! dir))
+
 (defn test-reset-pack-web-state! [root]
   (let [ctx (context root)]
     (fs/create-dirs (:state-dir ctx))
@@ -1071,6 +1094,7 @@
     "--test-agent-start-delay" (println (env-long "SWARMFORGE_AGENT_START_DELAY_MS" 1500))
     "--test-sleep-inhibitor-prefix" (test-sleep-inhibitor-prefix!)
     "--test-ensure-codex-trust" (test-ensure-codex-trust! (second args))
+    "--test-ensure-claude-trust" (test-ensure-claude-trust! (second args))
     "--test-reset-pack-web-state" (test-reset-pack-web-state! (second args))
     "--test-tmux-base-indexes" (test-tmux-base-indexes! (second args))
     "--test-create-role-session" (test-create-role-session! (second args) (nth args 2))
