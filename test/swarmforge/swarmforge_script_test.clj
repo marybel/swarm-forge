@@ -591,3 +591,35 @@
       (finally
         (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
         (fs/delete-tree root)))))
+(deftest role-session-pipes-pane-output-to-a-log-file
+  ;; Given a tmux socket
+  ;; When SwarmForge creates a role session
+  ;; Then its pane's output is already being logged before anything is typed into it
+  (let [root (tmp-dir)
+        sock (tmp-tmux-socket)
+        log-file (fs/path root "pane.log")
+        session "swarmforge-specifier"]
+    (try
+      (run {:dir root}
+          (script "swarmforge.bb")
+          "--test-create-role-session"
+          sock
+          session
+          (str log-file))
+      (run {:dir root} "tmux" "-S" sock "send-keys" "-t" session "-l" "hello-from-pane")
+      (run {:dir root} "tmux" "-S" sock "send-keys" "-t" session "Enter")
+      (let [logged? (loop [attempts-left 50]
+                      (cond
+                        (and (fs/exists? log-file)
+                             (str/includes? (slurp (str log-file)) "hello-from-pane"))
+                        true
+
+                        (zero? attempts-left)
+                        false
+
+                        :else
+                        (do (Thread/sleep 100) (recur (dec attempts-left)))))]
+        (is logged? (str "expected " log-file " to contain the pane's output")))
+      (finally
+        (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
+        (fs/delete-tree root)))))
