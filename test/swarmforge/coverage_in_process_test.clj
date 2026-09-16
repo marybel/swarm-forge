@@ -288,7 +288,11 @@
   (is (swarmforge/skip-config-line? "# hi"))
   (is (swarmforge/skip-config-line? ""))
   (is (not (swarmforge/special-worktree? "coder")))
-  (is (some? (swarmforge/sleep-inhibitor-prefix))))
+  ;; nil is the correct result on a host with no sleep-inhibitor tool
+  ;; available (e.g. a container with no systemd running); the "explicitly
+  ;; disabled" case is covered by swarmforge-sleep-prevention-can-be-disabled.
+  (let [prefix (swarmforge/sleep-inhibitor-prefix)]
+    (is (or (nil? prefix) (vector? prefix)))))
 
 (deftest pack-board-helpers
   (is (= "hello" (pack-board/slug "Hello!")))
