@@ -1,5 +1,6 @@
 (ns swarmforge.script-test
   (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
             [clojure.java.shell :as sh]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]))
@@ -584,6 +585,76 @@
         (is (= 1 (count (re-seq (re-pattern (java.util.regex.Pattern/quote
                                              (str "[projects." (pr-str wt) "]")))
                                 cfg)))))
+      (finally
+        (fs/delete-tree root)
+        (fs/delete-tree home)))))
+
+(deftest swarmforge-trusts-claude-worktree-once
+  ;; Given a Claude worktree with no ~/.claude.json
+  ;; When startup ensures trust
+  ;; Then hasTrustDialogAccepted is true for that exact path, once
+  (let [root (tmp-dir)
+        home (fs/create-temp-dir {:prefix "claude-home."})
+        wt (str (fs/absolutize root))]
+    (try
+      (doseq [_ [1 2]]
+        (run {:dir root :env {"HOME" (str home)
+                              "PATH" (System/getenv "PATH")
+                              "GIT_CONFIG_NOSYSTEM" "1"}}
+             (script "swarmforge.bb")
+             "--test-ensure-claude-trust"
+             wt))
+      (let [cfg (json/parse-string (slurp (str (fs/path home ".claude.json"))))]
+        (is (true? (get-in cfg ["projects" wt "hasTrustDialogAccepted"]))))
+      (finally
+        (fs/delete-tree root)
+        (fs/delete-tree home)))))
+
+(deftest swarmforge-does-not-overwrite-existing-claude-project-fields
+  ;; Given an existing project entry with unrelated fields
+  ;; When startup ensures trust
+  ;; Then those fields survive, alongside hasTrustDialogAccepted
+  (let [root (tmp-dir)
+        home (fs/create-temp-dir {:prefix "claude-home."})
+        wt (str (fs/absolutize root))]
+    (try
+      (write-file (fs/path home ".claude.json")
+                  (json/generate-string {"projects" {wt {"allowedTools" ["Bash"]}}}))
+      (run {:dir root :env {"HOME" (str home)
+                            "PATH" (System/getenv "PATH")
+                            "GIT_CONFIG_NOSYSTEM" "1"}}
+           (script "swarmforge.bb")
+           "--test-ensure-claude-trust"
+           wt)
+      (let [cfg (json/parse-string (slurp (str (fs/path home ".claude.json"))))]
+        (is (= ["Bash"] (get-in cfg ["projects" wt "allowedTools"])))
+        (is (true? (get-in cfg ["projects" wt "hasTrustDialogAccepted"]))))
+      (finally
+        (fs/delete-tree root)
+        (fs/delete-tree home)))))
+
+(deftest swarmforge-claude-trust-does-not-disturb-other-projects-or-top-level-keys
+  ;; Given an unrelated top-level key and another project's entry
+  ;; When startup trusts a different worktree
+  ;; Then both are left byte-for-byte unchanged
+  (let [root (tmp-dir)
+        home (fs/create-temp-dir {:prefix "claude-home."})
+        wt (str (fs/absolutize root))
+        oauth-account {"emailAddress" "someone@example.com" "accountUuid" "abc-123"}
+        other-project {"hasTrustDialogAccepted" true "allowedTools" ["Edit"]}]
+    (try
+      (write-file (fs/path home ".claude.json")
+                  (json/generate-string {"oauthAccount" oauth-account
+                                         "projects" {"/other" other-project}}))
+      (run {:dir root :env {"HOME" (str home)
+                            "PATH" (System/getenv "PATH")
+                            "GIT_CONFIG_NOSYSTEM" "1"}}
+           (script "swarmforge.bb")
+           "--test-ensure-claude-trust"
+           wt)
+      (let [cfg (json/parse-string (slurp (str (fs/path home ".claude.json"))))]
+        (is (= oauth-account (get cfg "oauthAccount")))
+        (is (= other-project (get-in cfg ["projects" "/other"]))))
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
