@@ -385,6 +385,19 @@
   (sh "tmux" "-S" (:tmux-socket ctx) "rename-window" "-t" (str session ":" agent-window) title)
   (sh "tmux" "-S" (:tmux-socket ctx) "set-window-option" "-t" (str session ":" title) "allow-rename" "off"))
 
+(defn pane-log-file [ctx role]
+  (fs/path (:state-dir ctx) "logs" (str role ".log")))
+
+(defn start-pane-logging!
+  "Pipe a role's pane output to a log file under .swarmforge/logs/, so the
+  transcript survives even if the pane/session/tmux server is torn down
+  (e.g. by swarm-cleanup.sh) before anyone has a chance to attach."
+  [ctx session title role]
+  (let [log-file (pane-log-file ctx role)]
+    (fs/create-dirs (fs/parent log-file))
+    (sh "tmux" "-S" (:tmux-socket ctx) "pipe-pane" "-o" "-t" (str session ":" title)
+        (str "cat >> " (sq (str log-file))))))
+
 (def aps-tool-purpose
   {"gherkin-parser" "APS parsing"
    "ir-dry-checker" "IR DRY"
@@ -856,7 +869,8 @@
   (println reset)
   (println (str green "Launching SwarmForge tmux sessions..." reset))
   (doseq [row (:roles ctx)]
-    (create-role-session! ctx (:session row) (:display-name row)))
+    (create-role-session! ctx (:session row) (:display-name row))
+    (start-pane-logging! ctx (:session row) (:display-name row) (:role row)))
   (write-tmux-env-file! ctx))
 
 (defn run-main! [root]
