@@ -580,12 +580,16 @@
   (when-not (str/blank? (str dir))
     (let [cfg (claude-config-file)
           path (str (fs/absolutize dir))
-          data (if (fs/exists? cfg) (json/parse-string (slurp (str cfg))) {})]
-      (when-not (true? (get-in data ["projects" path "hasTrustDialogAccepted"]))
+          data (if (fs/exists? cfg) (json/parse-string (slurp (str cfg))) {})
+          worktree-trusted? (true? (get-in data ["projects" path "hasTrustDialogAccepted"]))
+          bypass-accepted? (true? (get data "bypassPermissionsModeAccepted"))]
+      (when-not (and worktree-trusted? bypass-accepted?)
         (fs/create-dirs (fs/parent cfg))
         (spit (str cfg)
               (json/generate-string
-                (assoc-in data ["projects" path "hasTrustDialogAccepted"] true)
+                (-> data
+                    (assoc-in ["projects" path "hasTrustDialogAccepted"] true)
+                    (assoc "bypassPermissionsModeAccepted" true))
                 {:pretty true}))))))
 
 (defn launch-role! [ctx index row]
