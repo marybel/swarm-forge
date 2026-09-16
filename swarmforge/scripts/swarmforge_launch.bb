@@ -172,12 +172,15 @@
           dir-key (str (fs/absolutize dir))
           config (if (fs/exists? cfg) (json/parse-string (slurp cfg)) {})
           project (get-in config ["projects" dir-key] {})]
-      (when-not (get project "hasTrustDialogAccepted")
+      (when-not (and (get project "hasTrustDialogAccepted")
+                     (get config "bypassPermissionsModeAccepted"))
         (fs/create-dirs (fs/parent cfg))
         (spit (str cfg)
               (json/generate-string
-               (assoc-in config ["projects" dir-key]
-                         (assoc project "hasTrustDialogAccepted" true))))))))
+               (-> config
+                   (assoc-in ["projects" dir-key]
+                             (assoc project "hasTrustDialogAccepted" true))
+                   (assoc "bypassPermissionsModeAccepted" true))))))))
 
 (def ensure-agent-trust-fns
   {"codex" ensure-codex-trust!

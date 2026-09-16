@@ -559,6 +559,26 @@
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
+(deftest swarmforge-claude-trust-also-accepts-bypass-permissions-disclaimer
+  ;; Given a claude worktree with no .claude.json
+  ;; When startup ensures trust
+  ;; Then the top-level bypassPermissionsModeAccepted flag is also true
+  (let [root (tmp-dir)
+        home (fs/create-temp-dir {:prefix "claude-home."})
+        cfg-file (fs/path home ".claude.json")
+        wt (str (fs/absolutize root))]
+    (try
+      (run {:dir root :env {"CLAUDE_CONFIG_FILE" (str cfg-file)
+                            "PATH" (System/getenv "PATH")
+                            "GIT_CONFIG_NOSYSTEM" "1"}}
+           (script "swarmforge.bb")
+           "--test-ensure-claude-trust"
+           wt)
+      (let [cfg (json/parse-string (slurp (str cfg-file)))]
+        (is (= true (get cfg "bypassPermissionsModeAccepted"))))
+      (finally
+        (fs/delete-tree root)
+        (fs/delete-tree home)))))
 (deftest swarmforge-start-order-opens-dashboard-before-agents
   ;; Given a pack
   ;; When --test-start-order
