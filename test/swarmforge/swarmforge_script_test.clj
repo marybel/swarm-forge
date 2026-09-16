@@ -1,5 +1,6 @@
 (ns swarmforge.swarmforge-script-test
   (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [swarmforge.script-test-support :refer :all]))
@@ -534,6 +535,26 @@
         (is (= 1 (count (re-seq (re-pattern (java.util.regex.Pattern/quote
                                              (str "[projects." (pr-str wt) "]")))
                                 cfg)))))
+      (finally
+        (fs/delete-tree root)
+        (fs/delete-tree home)))))
+(deftest swarmforge-trusts-workspace-for-claude-launches
+  ;; Given a claude worktree with no ~/.claude.json
+  ;; When startup ensures trust
+  ;; Then .claude.json gains hasTrustDialogAccepted for that exact path, once
+  (let [root (tmp-dir)
+        home (fs/create-temp-dir {:prefix "claude-home."})
+        wt (str (fs/absolutize root))]
+    (try
+      (doseq [_ [1 2]]
+        (run {:dir root :env {"HOME" (str home)
+                              "PATH" (System/getenv "PATH")
+                              "GIT_CONFIG_NOSYSTEM" "1"}}
+             (script "swarmforge.bb")
+             "--test-ensure-claude-trust"
+             wt))
+      (let [cfg (json/parse-string (slurp (str (fs/path home ".claude.json"))))]
+        (is (= true (get-in cfg ["projects" wt "hasTrustDialogAccepted"]))))
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
