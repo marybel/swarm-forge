@@ -154,11 +154,17 @@
   (doseq [agent (map :agent (:roles ctx))]
     (check-dependency! agent)))
 
-(defn create-role-session! [ctx session title]
+(defn create-role-session! [ctx session title pane-log-file]
   (sh "tmux" "-S" (:tmux-socket ctx) "new-session" "-d" "-s" session "-n" agent-window)
   (sh "tmux" "-S" (:tmux-socket ctx) "set-option" "-t" session "history-limit" (str pane-history-limit))
   (sh "tmux" "-S" (:tmux-socket ctx) "rename-window" "-t" (str session ":" agent-window) title)
-  (sh "tmux" "-S" (:tmux-socket ctx) "set-window-option" "-t" (str session ":" title) "allow-rename" "off"))
+  (sh "tmux" "-S" (:tmux-socket ctx) "set-window-option" "-t" (str session ":" title) "allow-rename" "off")
+  ;; Piped before anything is ever typed into the pane, so a crash in the
+  ;; launch command (or in the agent itself) is still captured even if the
+  ;; session/tmux-server gets torn down right after.
+  (fs/create-dirs (fs/parent pane-log-file))
+  (sh "tmux" "-S" (:tmux-socket ctx) "pipe-pane" "-o" "-t" session
+      (str "cat >> " (sq (str pane-log-file)))))
 
 (def aps-tool-purpose
   {"gherkin-parser" "APS parsing"
@@ -274,6 +280,9 @@
         (Thread/sleep delay-ms))
       (launch-role! ctx index row))))
 
+(defn pane-log-file-for [ctx role]
+  (fs/path (:state-dir ctx) "logs" (str role ".log")))
+
 (defn boot-sessions! [ctx]
   (println (str cyan bold))
   (println "  SwarmForge v1.0 Starting")
@@ -281,7 +290,8 @@
   (println reset)
   (println (str green "Launching SwarmForge tmux sessions..." reset))
   (doseq [row (:roles ctx)]
-    (create-role-session! ctx (:session row) (:display-name row)))
+    (create-role-session! ctx (:session row) (:display-name row)
+                          (pane-log-file-for ctx (:role row))))
   (write-tmux-env-file! ctx))
 
 (defn run-main! [root]
@@ -413,8 +423,8 @@
                                         :tmux-socket-dir (str (fs/parent (fs/path tmux-socket)))})]
     (println (:tmux-window-base-index ctx) (:tmux-pane-base-index ctx))))
 
-(defn test-create-role-session! [tmux-socket session]
-  (create-role-session! {:tmux-socket tmux-socket} session "Specifier")
+(defn test-create-role-session! [tmux-socket session pane-log-file]
+  (create-role-session! {:tmux-socket tmux-socket} session "Specifier" pane-log-file)
   (println (sh-out "tmux" "-S" tmux-socket "show-options" "-t" session "-qv" "history-limit")))
 
 (defn test-launch-command! [root agent & [extra-args]]
@@ -487,7 +497,7 @@
     "--test-ensure-codex-trust" (test-ensure-codex-trust! (second args))
     "--test-reset-pack-web-state" (test-reset-pack-web-state! (second args))
     "--test-tmux-base-indexes" (test-tmux-base-indexes! (second args))
-    "--test-create-role-session" (test-create-role-session! (second args) (nth args 2))
+    "--test-create-role-session" (test-create-role-session! (second args) (nth args 2) (nth args 3))
     "--start-project" (run-project! (second args))
     "--stop-project" (run-stop-project! (second args))
     "--test-forge-root" (println (boolean (forge-root? (second args))))

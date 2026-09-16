@@ -584,7 +584,8 @@
                         (script "swarmforge.bb")
                         "--test-create-role-session"
                         sock
-                        "swarmforge-specifier")
+                        "swarmforge-specifier"
+                        (str (fs/path root "pane.log")))
             limit (Long/parseLong (str/trim (:out result)))]
         (is (zero? (:exit result)))
         (is (>= limit 2000)))
