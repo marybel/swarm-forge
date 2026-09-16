@@ -611,11 +611,12 @@
         (fs/delete-tree home)))))
 
 (deftest swarmforge-claude-trust-also-accepts-bypass-permissions-disclaimer
-  ;; Given a Claude worktree with no ~/.claude.json
+  ;; Given a Claude worktree with no ~/.claude/settings.json
   ;; When startup ensures trust
-  ;; Then the top-level bypassPermissionsModeAccepted flag is also true
+  ;; Then skipDangerousModePermissionPrompt is true in userSettings
   (let [root (tmp-dir)
         home (fs/create-temp-dir {:prefix "claude-home."})
+        settings-file (fs/path home ".claude" "settings.json")
         wt (str (fs/absolutize root))]
     (try
       (run {:dir root :env {"HOME" (str home)
@@ -624,8 +625,31 @@
            (script "swarmforge.bb")
            "--test-ensure-claude-trust"
            wt)
-      (let [cfg (json/parse-string (slurp (str (fs/path home ".claude.json"))))]
-        (is (true? (get cfg "bypassPermissionsModeAccepted"))))
+      (let [settings (json/parse-string (slurp (str settings-file)))]
+        (is (true? (get settings "skipDangerousModePermissionPrompt"))))
+      (finally
+        (fs/delete-tree root)
+        (fs/delete-tree home)))))
+
+(deftest swarmforge-claude-trust-preserves-existing-settings
+  ;; Given ~/.claude/settings.json with unrelated settings
+  ;; When startup ensures trust
+  ;; Then those settings survive, alongside skipDangerousModePermissionPrompt
+  (let [root (tmp-dir)
+        home (fs/create-temp-dir {:prefix "claude-home."})
+        settings-file (fs/path home ".claude" "settings.json")
+        wt (str (fs/absolutize root))]
+    (try
+      (write-file settings-file (json/generate-string {"theme" "dark"}))
+      (run {:dir root :env {"HOME" (str home)
+                            "PATH" (System/getenv "PATH")
+                            "GIT_CONFIG_NOSYSTEM" "1"}}
+           (script "swarmforge.bb")
+           "--test-ensure-claude-trust"
+           wt)
+      (let [settings (json/parse-string (slurp (str settings-file)))]
+        (is (= "dark" (get settings "theme")))
+        (is (true? (get settings "skipDangerousModePermissionPrompt"))))
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
