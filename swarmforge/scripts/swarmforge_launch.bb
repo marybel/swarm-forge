@@ -166,21 +166,40 @@
   (or (not-empty (System/getenv "CLAUDE_CONFIG_FILE"))
       (str (fs/path (System/getProperty "user.home") ".claude.json"))))
 
+(defn claude-settings-file []
+  (str (fs/path (or (not-empty (System/getenv "CLAUDE_CONFIG_DIR"))
+                     (str (fs/path (System/getProperty "user.home") ".claude")))
+                "settings.json")))
+
+(defn ensure-claude-worktree-trusted! [dir]
+  (let [cfg (claude-config-file)
+        dir-key (str (fs/absolutize dir))
+        config (if (fs/exists? cfg) (json/parse-string (slurp cfg)) {})
+        project (get-in config ["projects" dir-key] {})]
+    (when-not (get project "hasTrustDialogAccepted")
+      (fs/create-dirs (fs/parent cfg))
+      (spit (str cfg)
+            (json/generate-string
+             (assoc-in config ["projects" dir-key]
+                       (assoc project "hasTrustDialogAccepted" true)))))))
+
+;; The bypass-permissions disclaimer's "Yes, I accept" writes
+;; skipDangerousModePermissionPrompt into ~/.claude/settings.json (the
+;; userSettings scope) -- not .claude.json, whose bypassPermissionsModeAccepted
+;; key is only consulted by a one-time migration this install never triggered.
+(defn ensure-claude-bypass-permissions-accepted! []
+  (let [settings-file (claude-settings-file)
+        settings (if (fs/exists? settings-file) (json/parse-string (slurp settings-file)) {})]
+    (when-not (get settings "skipDangerousModePermissionPrompt")
+      (fs/create-dirs (fs/parent settings-file))
+      (spit (str settings-file)
+            (json/generate-string
+             (assoc settings "skipDangerousModePermissionPrompt" true))))))
+
 (defn ensure-claude-trust! [dir]
   (when-not (str/blank? (str dir))
-    (let [cfg (claude-config-file)
-          dir-key (str (fs/absolutize dir))
-          config (if (fs/exists? cfg) (json/parse-string (slurp cfg)) {})
-          project (get-in config ["projects" dir-key] {})]
-      (when-not (and (get project "hasTrustDialogAccepted")
-                     (get config "bypassPermissionsModeAccepted"))
-        (fs/create-dirs (fs/parent cfg))
-        (spit (str cfg)
-              (json/generate-string
-               (-> config
-                   (assoc-in ["projects" dir-key]
-                             (assoc project "hasTrustDialogAccepted" true))
-                   (assoc "bypassPermissionsModeAccepted" true))))))))
+    (ensure-claude-worktree-trusted! dir)
+    (ensure-claude-bypass-permissions-accepted!)))
 
 (def ensure-agent-trust-fns
   {"codex" ensure-codex-trust!
