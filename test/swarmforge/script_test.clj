@@ -377,6 +377,23 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest deepseek-launch-command-uses-codex-with-deepseek-profile
+  ;; Given a pack role configured with backend deepseek
+  ;; When SwarmForge builds the launch command
+  ;; Then it invokes the codex CLI with the DeepSeek model profile
+  (let [root (tmp-dir)]
+    (try
+      (let [result (run {:dir root}
+                        (script "swarmforge.bb")
+                        "--test-launch-command"
+                        (str root)
+                        "deepseek")
+            command (:out result)]
+        (is (str/includes? command "codex -C "))
+        (is (str/includes? command "--profile deepseek")))
+      (finally
+        (fs/delete-tree root)))))
+
 (deftest start-pack-web-drops-stale-dashboard-url
   ;; Given a leftover dashboard-url and pack_web.pid from a prior run
   ;; When SwarmForge prepares to start the dashboard
