@@ -390,7 +390,9 @@
                         "deepseek")
             command (:out result)]
         (is (str/includes? command "codex -C "))
-        (is (str/includes? command "--profile deepseek")))
+        (is (str/includes? command "--profile deepseek"))
+        (is (str/includes? command "--no-alt-screen"))
+        (is (str/includes? command "--yolo")))
       (finally
         (fs/delete-tree root)))))
 
