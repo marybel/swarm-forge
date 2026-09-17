@@ -537,7 +537,10 @@
                   "grok" (str "grok --cwd " (sq (str role-worktree)) " "
                               (grok-permission-prefix row) (extra-args-prefix row)
                               "--minimal --rules " prompt
-                              (when initial-prompt? (str " --verbatim " prompt)))))
+                              (when initial-prompt? (str " --verbatim " prompt)))
+                  "deepseek" (str "codex -C " (sq (str role-worktree)) " "
+                                  "--profile deepseek " (extra-args-prefix row)
+                                  (when initial-prompt? prompt))))
       (= index 0)
       (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
            " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
