@@ -501,6 +501,13 @@
     "--no-alt-screen "
     ""))
 
+(defn codex-cli-command [role-worktree row initial-prompt? prompt profile-prefix]
+  (str "codex -C " (sq (str role-worktree)) " "
+       profile-prefix
+       (no-alt-screen-flag "codex" row) (yolo-flag "codex" row)
+       (extra-args-prefix row)
+       (when initial-prompt? prompt)))
+
 (defn launch-command [ctx index row]
   (let [role (:role row)
         agent (:agent row)
@@ -525,10 +532,7 @@
                                 (yolo-flag agent row) "-n " (sq (str "SwarmForge " display)) " "
                                 (extra-args-prefix row)
                                 (when initial-prompt? prompt))
-                  "codex" (str "codex -C " (sq (str role-worktree)) " "
-                               (no-alt-screen-flag agent row) (yolo-flag agent row)
-                               (extra-args-prefix row)
-                               (when initial-prompt? prompt))
+                  "codex" (codex-cli-command role-worktree row initial-prompt? prompt "")
                   "copilot" (str "copilot -C " (sq (str role-worktree)) " "
                                  (no-alt-screen-flag agent row)
                                  "--name " (sq (str "SwarmForge " display)) " "
@@ -538,9 +542,8 @@
                               (grok-permission-prefix row) (extra-args-prefix row)
                               "--minimal --rules " prompt
                               (when initial-prompt? (str " --verbatim " prompt)))
-                  "deepseek" (str "codex -C " (sq (str role-worktree)) " "
-                                  "--profile deepseek " (extra-args-prefix row)
-                                  (when initial-prompt? prompt))))
+                  "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
+                                                 "--profile deepseek ")))
       (= index 0)
       (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
            " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
