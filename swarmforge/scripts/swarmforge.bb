@@ -372,6 +372,8 @@
       (fs/copy (:tmux-socket-file ctx) (fs/path role-state-dir "tmux-socket") {:replace-existing true})
       (fs/copy (:tmux-env-file ctx) (fs/path role-state-dir "tmux-env") {:replace-existing true}))))
 
+(defn required-command [agent] agent)
+
 (defn check-dependency! [command]
   (when-not (command-exists? command)
     (fail! (str red "Error:" reset " '" command "' is required but not installed."))))
@@ -1127,6 +1129,7 @@
     "--test-reset-pack-web-state" (test-reset-pack-web-state! (second args))
     "--test-tmux-base-indexes" (test-tmux-base-indexes! (second args))
     "--test-create-role-session" (test-create-role-session! (second args) (nth args 2))
+    "--test-required-command" (println (required-command (second args)))
     "--start-project" (run-project! (second args))
     "--stop-project" (run-stop-project! (second args))
     (let [root (or (first args) (System/getProperty "user.dir"))]

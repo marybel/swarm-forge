@@ -142,6 +142,29 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest deepseek-backend-requires-codex-binary
+  ;; Given the deepseek backend runs through the codex CLI under the hood
+  ;; When the dependency-check command is resolved for it
+  ;; Then it checks for codex, not a nonexistent deepseek binary
+  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-required-command" "deepseek")]
+    (is (= "codex" (str/trim (:out result))))))
+
+(deftest swarmforge-accepts-deepseek-as-known-agent
+  ;; Given a role configured with backend deepseek
+  ;; When --test-parse validates swarmforge.conf
+  ;; Then it parses successfully instead of rejecting deepseek as unsupported
+  (let [root (tmp-dir)]
+    (try
+      (write-file (fs/path root "swarmforge/constitution.prompt")
+                  "Read articles.\n")
+      (write-file (fs/path root "swarmforge/swarmforge.conf")
+                  "window coder deepseek master\n")
+      (write-file (fs/path root "swarmforge/roles/coder.prompt") "coder\n")
+      (let [result (run {:dir root} (script "swarmforge.bb") "--test-parse" (str root))]
+        (is (str/includes? (:out result) "coder Coder")))
+      (finally
+        (fs/delete-tree root)))))
+
 (deftest swarmforge-parses-window-invisible
   ;; Given window-invisible specifier codex master
   ;; When --test-parse
