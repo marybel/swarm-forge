@@ -142,6 +142,13 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest deepseek-backend-requires-codex-binary
+  ;; Given the deepseek backend runs through the codex CLI under the hood
+  ;; When the dependency-check command is resolved for it
+  ;; Then it checks for codex, not a nonexistent deepseek binary
+  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-required-command" "deepseek")]
+    (is (= "codex" (str/trim (:out result))))))
+
 (deftest swarmforge-accepts-deepseek-as-known-agent
   ;; Given a role configured with backend deepseek
   ;; When --test-parse validates swarmforge.conf
