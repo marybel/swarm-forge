@@ -571,7 +571,8 @@
     (str/ends-with? text "\n") text
     :else (str text "\n")))
 
-(defn codex-backed? [agent] false)
+(defn codex-backed? [agent]
+  (= "codex" (required-command agent)))
 
 (defn ensure-codex-trust! [dir]
   (when-not (str/blank? (str dir))
@@ -626,7 +627,7 @@
     (ensure-claude-bypass-permissions-accepted!)))
 
 (defn launch-role! [ctx index row]
-  (when (= "codex" (:agent row))
+  (when (codex-backed? (:agent row))
     (ensure-codex-trust! (:worktree-path row)))
   (when (= "claude" (:agent row))
     (ensure-claude-trust! (:worktree-path row)))
