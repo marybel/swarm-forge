@@ -17,7 +17,7 @@
 
 (def receive-modes #{"task" "batch"})
 (def propagation-modes #{"forward-only" "back-one" "back-all"})
-(def known-agents #{"claude" "codex" "copilot" "grok"})
+(def known-agents #{"claude" "codex" "copilot" "grok" "deepseek"})
 
 (defn role-name? [value]
   (boolean (re-matches #"[A-Za-z][A-Za-z0-9-]*" (or value ""))))

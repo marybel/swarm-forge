@@ -92,6 +92,13 @@
     "--no-alt-screen "
     ""))
 
+(defn codex-cli-command [role-worktree row initial-prompt? prompt profile-prefix]
+  (str "codex -C " (sq (str role-worktree)) " "
+       profile-prefix
+       (no-alt-screen-flag "codex" row) (yolo-flag "codex" row)
+       (extra-args-prefix row)
+       (when initial-prompt? prompt)))
+
 (defn launch-command [ctx index row]
   (let [role (:role row)
         agent (:agent row)
@@ -116,10 +123,7 @@
                                 (yolo-flag agent row) "-n " (sq (str "SwarmForge " display)) " "
                                 (extra-args-prefix row)
                                 (when initial-prompt? prompt))
-                  "codex" (str "codex -C " (sq (str role-worktree)) " "
-                               (no-alt-screen-flag agent row) (yolo-flag agent row)
-                               (extra-args-prefix row)
-                               (when initial-prompt? prompt))
+                  "codex" (codex-cli-command role-worktree row initial-prompt? prompt "")
                   "copilot" (str "copilot -C " (sq (str role-worktree)) " "
                                  (no-alt-screen-flag agent row)
                                  "--name " (sq (str "SwarmForge " display)) " "
@@ -128,7 +132,9 @@
                   "grok" (str "grok --cwd " (sq (str role-worktree)) " "
                               (grok-permission-prefix row) (extra-args-prefix row)
                               "--minimal --rules " prompt
-                              (when initial-prompt? (str " --verbatim " prompt)))))
+                              (when initial-prompt? (str " --verbatim " prompt)))
+                  "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
+                                                 "--profile deepseek ")))
       (= index 0)
       (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
            " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
@@ -201,13 +207,11 @@
     (ensure-claude-worktree-trusted! dir)
     (ensure-claude-bypass-permissions-accepted!)))
 
-(def ensure-agent-trust-fns
-  {"codex" ensure-codex-trust!
-   "claude" ensure-claude-trust!})
-
 (defn launch-role! [ctx index row]
-  (when-let [ensure-trust! (ensure-agent-trust-fns (:agent row))]
-    (ensure-trust! (:worktree-path row)))
+  (when (codex-backed? (:agent row))
+    (ensure-codex-trust! (:worktree-path row)))
+  (when (= "claude" (:agent row))
+    (ensure-claude-trust! (:worktree-path row)))
   (let [session (:session row)
         display (:display-name row)
         command (launch-command ctx index row)]

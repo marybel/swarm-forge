@@ -147,13 +147,22 @@
 (def swarmforge-script-dir (fs/parent *file*))
 (load-file (str (fs/path swarmforge-script-dir "swarmforge_config.bb")))
 
+(def agent-required-command
+  {"deepseek" "codex"})
+
+(defn required-command [agent]
+  (get agent-required-command agent agent))
+
+(defn codex-backed? [agent]
+  (= "codex" (required-command agent)))
+
 (defn check-dependency! [command]
   (when-not (command-exists? command)
     (fail! (str red "Error:" reset " '" command "' is required but not installed."))))
 
 (defn check-backend-dependencies! [ctx]
   (doseq [agent (map :agent (:roles ctx))]
-    (check-dependency! agent)))
+    (check-dependency! (required-command agent))))
 
 (defn create-role-session! [ctx session title pane-log-file]
   (sh "tmux" "-S" (:tmux-socket ctx) "new-session" "-d" "-s" session "-n" agent-window)
@@ -504,6 +513,8 @@
     "--test-reset-pack-web-state" (test-reset-pack-web-state! (second args))
     "--test-tmux-base-indexes" (test-tmux-base-indexes! (second args))
     "--test-create-role-session" (test-create-role-session! (second args) (nth args 2) (nth args 3))
+    "--test-required-command" (println (required-command (second args)))
+    "--test-codex-backed" (println (codex-backed? (second args)))
     "--start-project" (run-project! (second args))
     "--stop-project" (run-stop-project! (second args))
     "--test-forge-root" (println (boolean (forge-root? (second args))))
