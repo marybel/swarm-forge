@@ -142,6 +142,22 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest swarmforge-accepts-deepseek-as-known-agent
+  ;; Given a role configured with backend deepseek
+  ;; When --test-parse validates swarmforge.conf
+  ;; Then it parses successfully instead of rejecting deepseek as unsupported
+  (let [root (tmp-dir)]
+    (try
+      (write-file (fs/path root "swarmforge/constitution.prompt")
+                  "Read articles.\n")
+      (write-file (fs/path root "swarmforge/swarmforge.conf")
+                  "window coder deepseek master\n")
+      (write-file (fs/path root "swarmforge/roles/coder.prompt") "coder\n")
+      (let [result (run {:dir root} (script "swarmforge.bb") "--test-parse" (str root))]
+        (is (str/includes? (:out result) "coder Coder")))
+      (finally
+        (fs/delete-tree root)))))
+
 (deftest swarmforge-parses-window-invisible
   ;; Given window-invisible specifier codex master
   ;; When --test-parse
