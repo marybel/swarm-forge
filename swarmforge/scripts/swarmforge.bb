@@ -571,6 +571,8 @@
     (str/ends-with? text "\n") text
     :else (str text "\n")))
 
+(defn codex-backed? [agent] false)
+
 (defn ensure-codex-trust! [dir]
   (when-not (str/blank? (str dir))
     (let [home (codex-home)
@@ -1134,6 +1136,7 @@
     "--test-tmux-base-indexes" (test-tmux-base-indexes! (second args))
     "--test-create-role-session" (test-create-role-session! (second args) (nth args 2))
     "--test-required-command" (println (required-command (second args)))
+    "--test-codex-backed" (println (codex-backed? (second args)))
     "--start-project" (run-project! (second args))
     "--stop-project" (run-stop-project! (second args))
     (let [root (or (first args) (System/getProperty "user.dir"))]

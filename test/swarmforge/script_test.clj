@@ -142,6 +142,13 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest deepseek-backend-is-codex-backed
+  ;; Given the deepseek backend runs through the codex CLI under the hood
+  ;; When codex-backed? checks it
+  ;; Then it reports true, so launch-role! pre-trusts the worktree for it too
+  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-codex-backed" "deepseek")]
+    (is (= "true" (str/trim (:out result))))))
+
 (deftest deepseek-backend-requires-codex-binary
   ;; Given the deepseek backend runs through the codex CLI under the hood
   ;; When the dependency-check command is resolved for it
