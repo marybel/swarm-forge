@@ -372,7 +372,11 @@
       (fs/copy (:tmux-socket-file ctx) (fs/path role-state-dir "tmux-socket") {:replace-existing true})
       (fs/copy (:tmux-env-file ctx) (fs/path role-state-dir "tmux-env") {:replace-existing true}))))
 
-(defn required-command [agent] agent)
+(def agent-required-command
+  {"deepseek" "codex"})
+
+(defn required-command [agent]
+  (get agent-required-command agent agent))
 
 (defn check-dependency! [command]
   (when-not (command-exists? command)
@@ -380,7 +384,7 @@
 
 (defn check-backend-dependencies! [ctx]
   (doseq [agent (map :agent (:roles ctx))]
-    (check-dependency! agent)))
+    (check-dependency! (required-command agent))))
 
 (defn create-role-session! [ctx session title]
   (sh "tmux" "-S" (:tmux-socket ctx) "new-session" "-d" "-s" session "-n" agent-window)
