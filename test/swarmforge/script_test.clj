@@ -886,6 +886,80 @@
       (finally
         (fs/delete-tree root)))))
 
+(def mutate4java-fixture-pom
+  (str "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n"
+       "  <modelVersion>4.0.0</modelVersion>\n"
+       "  <parent>\n"
+       "    <groupId>com.unclebob</groupId>\n"
+       "    <artifactId>wiki-workspace</artifactId>\n"
+       "    <version>1.0</version>\n"
+       "  </parent>\n"
+       "  <artifactId>mutate4java</artifactId>\n"
+       "  <packaging>jar</packaging>\n"
+       "  <properties>\n"
+       "    <maven.compiler.source>17</maven.compiler.source>\n"
+       "    <maven.compiler.target>17</maven.compiler.target>\n"
+       "  </properties>\n"
+       "  <build>\n"
+       "    <plugins>\n"
+       "      <plugin>\n"
+       "        <groupId>org.apache.maven.plugins</groupId>\n"
+       "        <artifactId>maven-jar-plugin</artifactId>\n"
+       "        <configuration>\n"
+       "          <archive>\n"
+       "            <manifest>\n"
+       "              <mainClass>com.unclebob.mutate4java.Main</mainClass>\n"
+       "            </manifest>\n"
+       "          </archive>\n"
+       "        </configuration>\n"
+       "      </plugin>\n"
+       "    </plugins>\n"
+       "  </build>\n"
+       "</project>\n"))
+
+(def mutate4java-fixture-main
+  (str "package com.unclebob.mutate4java;\n\n"
+       "public class Main {\n"
+       "    public static void main(String[] args) {\n"
+       "        System.out.println(\"mutate4java-fixture-ran:\" + String.join(\",\", args));\n"
+       "    }\n"
+       "}\n"))
+
+(deftest swarm-tool-ensure-mutate4java-patches-pom-and-builds-jar
+  ;; Given a local mutate4java source with the broken wiki-workspace parent POM
+  ;; When swarm_tool.sh ensure mutate4java
+  ;; Then the parent block is replaced with inlined coordinates, the patched
+  ;; POM builds into a jar, and the installed wrapper runs that jar
+  (let [root (tmp-dir)
+        src (fs/path root "mutate4java-src")]
+    (try
+      (write-file (fs/path root ".swarmforge/roles.tsv")
+                  (format "specifier\tmaster\t%s\tsession\tSpecifier\tcodex\ttask\n" root))
+      (write-file (fs/path src "pom.xml") mutate4java-fixture-pom)
+      (write-file (fs/path src "src/main/java/com/unclebob/mutate4java/Main.java")
+                  mutate4java-fixture-main)
+      (run {:dir root
+            :env {"SWARMFORGE_TOOL_SRC" (str src)
+                  "PATH" (System/getenv "PATH")
+                  "GIT_CONFIG_NOSYSTEM" "1"}}
+           (script "swarm_tool.sh") "ensure" "mutate4java")
+      (let [pom (slurp (str (fs/path src "pom.xml")))
+            jar (fs/path src "target/mutate4java-0.1.0-SNAPSHOT.jar")
+            wrapper (fs/path root ".swarmforge/bin/mutate4java")]
+        (testing "the broken parent block is replaced with inlined coordinates"
+          (is (not (str/includes? pom "<parent>")))
+          (is (not (str/includes? pom "wiki-workspace")))
+          (is (str/includes? pom "<groupId>com.unclebob</groupId>"))
+          (is (str/includes? pom "<version>0.1.0-SNAPSHOT</version>")))
+        (testing "the patched POM builds into a jar"
+          (is (fs/exists? jar)))
+        (testing "the wrapper runs the built jar"
+          (is (fs/executable? wrapper))
+          (let [invocation (run {:dir root} (str wrapper) "hello")]
+            (is (str/includes? (:out invocation) "mutate4java-fixture-ran:hello")))))
+      (finally
+        (fs/delete-tree root)))))
+
 (deftest swarmforge-start-order-opens-dashboard-before-agents
   ;; Given a pack
   ;; When --test-start-order
