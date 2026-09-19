@@ -218,7 +218,7 @@
         "cd " (sq (str dir)) "\n"
         "exec java -jar target/mutate4java-0.1.0-SNAPSHOT.jar \"$@\"\n")))
 
-(defn install-maven-build! [root name spec]
+(defn install-maven-build! [root spec]
   (let [dir (ensure-source! root (:source spec) "pom.xml")]
     (patch-mutate4java-pom! dir)
     (build-mutate4java! dir)
@@ -230,8 +230,7 @@
         name (canonical-tool tool)
         target (cond
                  (:maven-build spec)
-                 (do (install-maven-build! root name spec)
-                     (wrapper-path root name))
+                 (install-maven-build! root spec)
 
                  (:bb-task spec)
                  (write-bb-wrapper! root name (:bb-task spec)
