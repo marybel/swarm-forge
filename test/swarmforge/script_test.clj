@@ -960,6 +960,32 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest swarm-tool-require-mutate4java-succeeds-once-wrapper-installed
+  ;; Given a pack project without mutate4java installed
+  ;; When require runs, it reports missing
+  ;; When ensure installs the Maven-built wrapper
+  ;; Then require succeeds
+  (let [root (tmp-dir)
+        src (fs/path root "mutate4java-src")]
+    (try
+      (write-file (fs/path root ".swarmforge/roles.tsv")
+                  (format "specifier\tmaster\t%s\tsession\tSpecifier\tcodex\ttask\n" root))
+      (let [missing (run {:dir root :ok? false}
+                         (script "swarm_tool.sh") "require" "mutate4java")]
+        (is (not= 0 (:exit missing)))
+        (is (str/includes? (:err missing) "MISSING: mutate4java")))
+      (write-file (fs/path src "pom.xml") mutate4java-fixture-pom)
+      (write-file (fs/path src "src/main/java/com/unclebob/mutate4java/Main.java")
+                  mutate4java-fixture-main)
+      (run {:dir root
+            :env {"SWARMFORGE_TOOL_SRC" (str src)
+                  "PATH" (System/getenv "PATH")
+                  "GIT_CONFIG_NOSYSTEM" "1"}}
+           (script "swarm_tool.sh") "ensure" "mutate4java")
+      (is (zero? (:exit (run {:dir root} (script "swarm_tool.sh") "require" "mutate4java"))))
+      (finally
+        (fs/delete-tree root)))))
+
 (deftest swarmforge-start-order-opens-dashboard-before-agents
   ;; Given a pack
   ;; When --test-start-order
