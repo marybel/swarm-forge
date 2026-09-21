@@ -322,6 +322,21 @@
                       {:http-status 400 :error "clone-failed"})))
     dest))
 
+(defn write-project-conf! [definition-root conf]
+  (when-not (str/blank? conf)
+    (fs/create-dirs (fs/path definition-root "swarmforge"))
+    (spit (str (fs/path definition-root "swarmforge" "swarmforge.conf")) conf)))
+
+(defn write-mission! [dir mission]
+  (when-not (nil? mission)
+    (spit (str (fs/path dir "mission.md"))
+          (if (str/ends-with? (or mission "") "\n") mission (str mission "\n")))))
+
+(defn record-managed-project! [dir]
+  (ensure-project-ignore! dir)
+  (init-git-if-needed! dir)
+  (commit-managed-project-state! dir))
+
 (declare close-project!)
 
 (defn instantiate! [forge {:keys [name github branch conf mission replace]}]
@@ -349,18 +364,12 @@
           (let [subject? (and github (tracks-swarmforge-conf? staging))
                 definition-root (if subject? (safe-paths/definition-dir staging) staging)]
             (overlay-pack! forge definition-root false)
-            (when-not (str/blank? conf)
-              (fs/create-dirs (fs/path definition-root "swarmforge"))
-              (spit (str (fs/path definition-root "swarmforge" "swarmforge.conf")) conf))
-            (when-not (nil? mission)
-              (spit (str (fs/path staging "mission.md"))
-                    (if (str/ends-with? (or mission "") "\n") mission (str mission "\n"))))
+            (write-project-conf! definition-root conf)
+            (write-mission! staging mission)
             (write-pack-name! staging "lieutenant")
             (if subject?
               (append-exclude-patterns! staging subject-exclude-patterns)
-              (do (ensure-project-ignore! staging)
-                  (init-git-if-needed! staging)
-                  (commit-managed-project-state! staging)))
+              (record-managed-project! staging))
             (fs/move staging dest)
             {:name dir-name :path (str dest)})
           (finally
