@@ -86,16 +86,14 @@
       (is (= "" (str/trim (:out (run {:dir dest} "git" "status" "--porcelain"))))))))
 (deftest forge-new-project-clones-the-requested-branch
   (let [dest (new-lieutenant-subject!)
-        branch (str/trim (:out (run {:dir dest} "git" "branch" "--show-current")))
-        product (fs/path dest "product.txt")
-        product-text (when (fs/exists? product) (slurp (str product)))]
+        branch (checked-out-branch dest)
+        product-text (read-if-exists (fs/path dest "product.txt"))]
     (is (= "lieutenant" branch) (str "checked-out branch: " (pr-str branch)))
     (is (= "lieutenant\n" product-text) (str "product.txt: " (pr-str product-text)))))
 (deftest forge-new-project-with-a-blank-branch-clones-the-default-branch
   (let [dest (new-lieutenant-subject! "")
-        branch (str/trim (:out (run {:dir dest} "git" "branch" "--show-current")))
-        product (fs/path dest "product.txt")
-        product-text (when (fs/exists? product) (slurp (str product)))]
+        branch (checked-out-branch dest)
+        product-text (read-if-exists (fs/path dest "product.txt"))]
     (is (= "master" branch) (str "checked-out branch: " (pr-str branch)))
     (is (= "default\n" product-text) (str "product.txt: " (pr-str product-text)))))
 (deftest forge-new-swarm-forge-subject-keeps-tracked-files-and-history
@@ -103,16 +101,14 @@
         source-tip (str/trim (:out (run {:dir dest} "git" "rev-parse" "origin/lieutenant")))
         head (head-sha dest)
         status (str/trim (:out (run {:dir dest} "git" "status" "--porcelain")))
-        ignore (fs/path dest ".gitignore")
-        ignore-text (when (fs/exists? ignore) (slurp (str ignore)))]
+        ignore-text (read-if-exists (fs/path dest ".gitignore"))]
     (is (= source-tip head) (str "HEAD " head " is not the source tip " source-tip))
     (is (= "" status) (str "git status not clean: " status))
     (is (= ".swarmforge/\n.worktrees/\n" ignore-text) (str ".gitignore: " (pr-str ignore-text)))))
 (deftest forge-new-swarm-forge-subject-creates-the-definition-directory
   (let [dest (new-lieutenant-subject!)
         definition (fs/path dest ".swarmforge/definition/swarmforge")
-        conf (fs/path definition "swarmforge.conf")
-        conf-text (when (fs/exists? conf) (slurp (str conf)))]
+        conf-text (read-if-exists (fs/path definition "swarmforge.conf"))]
     (is (= "window specifier grok master\nwindow coder grok coder\n" conf-text)
         (str "definition conf: " (pr-str conf-text)))
     (is (fs/exists? (fs/path definition "roles/specifier.prompt"))
@@ -121,8 +117,8 @@
         "definition has no forge scripts")))
 (deftest forge-new-swarm-forge-subject-excludes-forge-files
   (let [dest (new-lieutenant-subject!)
-        exclude (fs/path dest ".git/info/exclude")
-        lines (set (when (fs/exists? exclude) (str/split-lines (slurp (str exclude)))))]
+        exclude-text (read-if-exists (fs/path dest ".git/info/exclude"))
+        lines (set (str/split-lines (or exclude-text "")))]
     (doseq [pattern ["/tasks/" "/tmp/" "/mission.md"]]
       (is (contains? lines pattern)
           (str pattern " missing from .git/info/exclude: " (pr-str lines))))))
@@ -193,8 +189,7 @@
       (pack-web-env root {"SWARMFORGE_SKIP_START" "1"} "--test-open-project" (str root) "cave")
       (let [head-after (head-sha dest)
             status (str/trim (:out (run {:dir dest} "git" "status" "--porcelain")))
-            tracked (fs/path dest "swarmforge/obsolete.txt")
-            content (when (fs/exists? tracked) (slurp (str tracked)))]
+            content (read-if-exists (fs/path dest "swarmforge/obsolete.txt"))]
         (is (= head-before head-after)
             (str "HEAD moved from " head-before " to " head-after))
         (is (= "" status)

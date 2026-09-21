@@ -42,6 +42,11 @@
 (defn write-file [path text]
   (fs/create-dirs (fs/parent path))
   (spit (str path) text))
+(defn read-if-exists [path]
+  (when (fs/exists? path)
+    (slurp (str path))))
+(defn checked-out-branch [dir]
+  (str/trim (:out (run {:dir dir} "git" "branch" "--show-current"))))
 (defn write-codex-session! [codex-root cwd session-id events]
   (let [path (fs/path codex-root "sessions/2026/09/07"
                       (str "rollout-2026-09-07T12-00-00-" session-id ".jsonl"))
