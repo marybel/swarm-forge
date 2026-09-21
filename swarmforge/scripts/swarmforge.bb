@@ -190,6 +190,9 @@
    "QA" ["gherkin-parser"]})
 
 
+(load-file (str (fs/path swarmforge-script-dir "safe_paths.bb")))
+
+
 (load-file (str (fs/path swarmforge-script-dir "swarmforge_launch.bb")))
 
 
@@ -199,7 +202,7 @@
 (defn context [working-dir]
   (let [working-dir (fs/absolutize (fs/path working-dir))
         script-dir (fs/parent *file*)
-        swarm-forge-dir (fs/path working-dir "swarmforge")
+        swarm-forge-dir (fs/path (safe-paths/definition-root working-dir) "swarmforge")
         state-dir (fs/path working-dir ".swarmforge")
         daemon-dir (fs/path state-dir "daemon")
         crc (java.util.zip.CRC32.)

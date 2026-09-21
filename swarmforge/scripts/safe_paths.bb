@@ -44,6 +44,10 @@
     (invalid! "identifier" value))
   value)
 
+(defn definition-root [project]
+  (let [definition (fs/path project ".swarmforge" "definition")]
+    (if (fs/directory? definition) definition project)))
+
 (defn normalized [path]
   (.normalize (.toAbsolutePath (fs/path path))))
 
