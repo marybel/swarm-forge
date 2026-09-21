@@ -6,11 +6,14 @@
   (throw (ex-info (str "Invalid " label ": " (pr-str value))
                   {:http-status 400 :error "invalid-identifier"})))
 
-(defn project-name? [value]
+(defn identifier? [value]
   (boolean
    (and (string? value)
         (re-matches #"[A-Za-z0-9][A-Za-z0-9._-]*" value)
         (not (#{"." ".."} value)))))
+
+(defn project-name? [value]
+  (identifier? value))
 
 (defn task-name? [value]
   (boolean
@@ -21,10 +24,7 @@
         (not (re-find #"[\\/\p{Cntrl}]" value)))))
 
 (defn internal-id? [value]
-  (boolean
-   (and (string? value)
-        (re-matches #"[A-Za-z0-9][A-Za-z0-9._-]*" value)
-        (not (#{"." ".."} value)))))
+  (identifier? value))
 
 (defn state-key? [value]
   (or (internal-id? value) (task-name? value)))
