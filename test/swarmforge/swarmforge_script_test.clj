@@ -125,9 +125,10 @@
       (let [result (run {:dir root} (script "swarmforge.bb") "--test-sync-worktrees" (str root))]
         (is (zero? (:exit result)) (:err result))
         (doseq [state-file ["sessions.tsv" "roles.tsv" "routes.tsv"]]
-          (is (= (slurp (str (fs/path root ".swarmforge" state-file)))
-                 (slurp (str (fs/path worktree ".swarmforge" state-file))))
-              (str state-file " was not copied into the role worktree"))))
+          (let [copied (fs/path worktree ".swarmforge" state-file)
+                copied-text (when (fs/exists? copied) (slurp (str copied)))]
+            (is (= (slurp (str (fs/path root ".swarmforge" state-file))) copied-text)
+                (str state-file " in the role worktree: " (pr-str copied-text))))))
       (finally
         (fs/delete-tree root)))))
 (deftest swarmforge-role-path-uses-the-running-forge-scripts-for-a-definition-project
