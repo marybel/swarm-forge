@@ -169,6 +169,18 @@
           "definition was not rebuilt with the pack's role prompts")
       (is (str/includes? (slurp (str (fs/path definition "swarmforge.conf"))) "extra-flag")
           (str "definition conf was not kept: " (slurp (str (fs/path definition "swarmforge.conf"))))))))
+(deftest forge-open-sets-git-identity-for-a-definition-project
+  (let [root (tmp-dir)
+        env {"SWARMFORGE_SKIP_START" "1" "HOME" (str (tmp-dir))}]
+    (seed-mini-forge! root)
+    (let [dest (seed-definition-project! root)]
+      (run {:dir dest :env env} "git" "config" "--unset" "user.email")
+      (run {:dir dest :env env} "git" "config" "--unset" "user.name")
+      (pack-web-env root env "--test-open-project" (str root) "cave")
+      (doseq [setting ["user.email" "user.name"]]
+        (let [value (str/trim (:out (run {:dir dest :env env :ok? false}
+                                         "git" "config" "--get" setting)))]
+          (is (not (str/blank? value)) (str "git " setting " is blank after Open")))))))
 (deftest forge-state-tags-attention-with-project
   (let [root (tmp-dir)]
     (seed-mini-forge! root)
