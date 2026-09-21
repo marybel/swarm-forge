@@ -454,6 +454,12 @@
     (fs/create-dirs (:prompts-dir ctx))
     (println (launch-command ctx 1 row))))
 
+(defn test-role-launch-command! [root role]
+  (let [ctx (assoc (prepare-ctx (context root)) :terminal-backend "none")
+        row (first (filter #(= role (:role %)) (:roles ctx)))]
+    (fs/create-dirs (:prompts-dir ctx))
+    (println (launch-command ctx 1 row))))
+
 (defn test-lieutenant-launch-command! [root]
   (let [ctx (assoc (context root) :terminal-backend "none")
         row (assoc (lieutenant-row ctx) :worktree-path (fs/path root))]
@@ -504,6 +510,9 @@
     "--test-launch-command" (apply test-launch-command!
                                      (or (second args) (System/getProperty "user.dir"))
                                      (drop 2 args))
+    "--test-role-launch-command" (test-role-launch-command!
+                                 (or (second args) (System/getProperty "user.dir"))
+                                 (nth args 2))
     "--test-lieutenant-launch-command" (test-lieutenant-launch-command!
                                         (or (second args) (System/getProperty "user.dir")))
     "--test-install-hooks" (test-install-hooks! (second args))

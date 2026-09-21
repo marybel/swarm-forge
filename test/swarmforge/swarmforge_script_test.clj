@@ -103,6 +103,46 @@
       (is (= "keep\n" (slurp (str (fs/path worktree ".swarmforge/keep.state")))))
       (finally
         (fs/delete-tree root)))))
+(deftest swarmforge-sync-leaves-role-worktree-swarmforge-alone-for-a-definition-project
+  (let [root (tmp-dir)
+        worktree (fs/path root ".worktrees/coder")]
+    (try
+      (write-definition-pack! root)
+      (write-tracked-swarmforge! worktree)
+      (let [before (file-contents (fs/path worktree "swarmforge"))
+            result (run {:dir root} (script "swarmforge.bb") "--test-sync-worktrees" (str root))
+            after (file-contents (fs/path worktree "swarmforge"))]
+        (is (zero? (:exit result)) (:err result))
+        (is (= before after)
+            (str "worktree swarmforge/ files after sync: " (pr-str (keys after)))))
+      (finally
+        (fs/delete-tree root)))))
+(deftest swarmforge-sync-still-copies-state-into-role-worktrees-for-a-definition-project
+  (let [root (tmp-dir)
+        worktree (fs/path root ".worktrees/coder")]
+    (try
+      (write-definition-pack! root)
+      (let [result (run {:dir root} (script "swarmforge.bb") "--test-sync-worktrees" (str root))]
+        (is (zero? (:exit result)) (:err result))
+        (doseq [state-file ["sessions.tsv" "roles.tsv" "routes.tsv"]]
+          (is (= (slurp (str (fs/path root ".swarmforge" state-file)))
+                 (slurp (str (fs/path worktree ".swarmforge" state-file))))
+              (str state-file " was not copied into the role worktree"))))
+      (finally
+        (fs/delete-tree root)))))
+(deftest swarmforge-role-path-uses-the-running-forge-scripts-for-a-definition-project
+  (let [root (tmp-dir)]
+    (try
+      (write-definition-pack! root)
+      (let [out (:out (run {:dir root} (script "swarmforge.bb")
+                           "--test-role-launch-command" (str root) "coder"))
+            worktree-scripts (str (fs/path root ".worktrees/coder/swarmforge/scripts"))]
+        (is (str/includes? out (str ":'" scripts-dir "':$PATH"))
+            (str "running forge scripts dir not on PATH: " out))
+        (is (not (str/includes? out worktree-scripts))
+            (str "worktree scripts dir on PATH: " out)))
+      (finally
+        (fs/delete-tree root)))))
 (deftest swarmforge-uses-portable-tmux-socket-dir
   (let [root (tmp-dir)]
     (try

@@ -38,6 +38,27 @@
   (write-file (fs/path root "swarmforge/swarmforge.conf") conf)
   (write-file (fs/path root "swarmforge/roles/specifier.prompt") "specifier\n")
   (write-file (fs/path root "swarmforge/roles/coder.prompt") "coder\n"))
+(defn write-definition-pack! [root]
+  (let [definition (fs/path root ".swarmforge/definition/swarmforge")]
+    (write-file (fs/path definition "constitution.prompt") "definition constitution\n")
+    (write-file (fs/path definition "constitution/current.prompt") "definition article\n")
+    (write-file (fs/path definition "swarmforge.conf")
+                (str "window master-role codex master\n"
+                     "window coder codex coder\n"))
+    (write-file (fs/path definition "roles/master-role.prompt") "master\n")
+    (write-file (fs/path definition "roles/coder.prompt") "coder\n")))
+(defn write-tracked-swarmforge! [worktree]
+  (doseq [[name text] {"scripts/tracked.bb" "tracked script\n"
+                       "roles/coder.prompt" "tracked role\n"
+                       "constitution.prompt" "tracked constitution\n"
+                       "constitution/article.prompt" "tracked article\n"
+                       "swarmforge.conf" "tracked conf\n"}]
+    (write-file (fs/path worktree "swarmforge" name) text)))
+(defn file-contents [dir]
+  (into (sorted-map)
+        (for [file (fs/glob dir "**")
+              :when (fs/regular-file? file)]
+          [(str (fs/relativize dir file)) (slurp (str file))])))
 (defn commit-body [root]
   (:out (run {:dir root} "git" "log" "-1" "--format=%B")))
 (defn close-swarm []
