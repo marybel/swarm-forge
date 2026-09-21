@@ -9,6 +9,14 @@
     (load-file (str (fs/path repo-root "swarmforge" "scripts" "pack_web.bb")))))
 (in-ns 'pack-web)
 
+(defn test-http! [resp]
+  (print (:body resp))
+  (flush)
+  (when-not (= 200 (:status resp))
+    (binding [*out* *err*]
+      (println (:body resp)))
+    (System/exit 1)))
+
 (defn test-state! [root]
   (println (:body (handle-request (require-root! root) {:method "GET" :uri "/api/state"}))))
 
@@ -24,48 +32,28 @@
                                      (cond-> {:name name :text (or text "")}
                                        (not (str/blank? project)) (assoc :project project)
                                        (not (str/blank? type)) (assoc :type type)))})]
-    (print (:body resp))
-    (flush)
-    (when-not (= 200 (:status resp))
-      (binding [*out* *err*]
-        (println (:body resp)))
-      (System/exit 1))))
+    (test-http! resp)))
 
 (defn test-delete-task! [root name]
   (let [resp (handle-request (require-root! root)
                              {:method "POST"
                               :uri "/api/tasks/delete"
                               :body (json/generate-string {:name name})})]
-    (print (:body resp))
-    (flush)
-    (when-not (= 200 (:status resp))
-      (binding [*out* *err*]
-        (println (:body resp)))
-      (System/exit 1))))
+    (test-http! resp)))
 
 (defn test-delete-approval! [root id]
   (let [resp (handle-request (require-root! root)
                              {:method "POST"
                               :uri "/api/tasks/delete"
                               :body (json/generate-string {:id id})})]
-    (print (:body resp))
-    (flush)
-    (when-not (= 200 (:status resp))
-      (binding [*out* *err*]
-        (println (:body resp)))
-      (System/exit 1))))
+    (test-http! resp)))
 
 (defn test-retry-task! [root id comments]
   (let [resp (handle-request (require-root! root)
                              {:method "POST"
                               :uri "/api/tasks/retry"
                               :body (json/generate-string {:id id :comments (or comments "")})})]
-    (print (:body resp))
-    (flush)
-    (when-not (= 200 (:status resp))
-      (binding [*out* *err*]
-        (println (:body resp)))
-      (System/exit 1))))
+    (test-http! resp)))
 
 (defn test-post-chat! [root text]
   (handle-request (require-root! root)
@@ -83,14 +71,6 @@
     (exit! 1 "Missing argv file"))
   (binding [*tmux-stub* file]
     (inject-master! (require-root! root) text)))
-
-(defn test-http! [resp]
-  (print (:body resp))
-  (flush)
-  (when-not (= 200 (:status resp))
-    (binding [*out* *err*]
-      (println (:body resp)))
-    (System/exit 1)))
 
 (defn test-approval! [root id action]
   (when (str/blank? id)
@@ -321,20 +301,12 @@
                                              (str "&id=" id)))})))
   (flush))
 
-(defn test-project-http! [resp]
-  (print (:body resp))
-  (flush)
-  (when-not (= 200 (:status resp))
-    (binding [*out* *err*]
-      (println (:body resp)))
-    (System/exit 1)))
-
 (defn test-new-project!
   ([root name pack mission] (test-new-project! root name pack mission false false))
   ([root name pack mission github replace]
    (test-new-project! root name pack mission github replace nil nil))
   ([root name pack mission github replace branch conf]
-   (test-project-http!
+   (test-http!
     (handle-request (require-root! root)
                     {:method "POST"
                      :uri "/api/projects"
@@ -348,14 +320,14 @@
                               conf (assoc :conf conf)))}))))
 
 (defn test-open-project! [root name]
-  (test-project-http!
+  (test-http!
    (handle-request (require-root! root)
                    {:method "POST"
                     :uri "/api/projects/open"
                     :body (json/generate-string {:name name})})))
 
 (defn test-close-project! [root name]
-  (test-project-http!
+  (test-http!
    (handle-request (require-root! root)
                    {:method "POST"
                     :uri "/api/projects/close"
