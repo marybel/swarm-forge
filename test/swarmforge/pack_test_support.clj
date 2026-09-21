@@ -340,15 +340,16 @@
     (run {:dir source} "git" "commit" "-q" "-am" "Lieutenant branch")
     (run {:dir source} "git" "checkout" "-q" "-")))
 (defn new-lieutenant-subject!
-  ([] (new-lieutenant-subject! "lieutenant"))
-  ([branch]
+  ([] (new-lieutenant-subject! {}))
+  ([{:keys [branch conf] :or {branch "lieutenant"}}]
    (let [root (tmp-dir)
          github-base (tmp-dir)]
      (seed-mini-forge! root)
      (seed-swarm-forge-source! github-base)
-     (pack-web-env root {"SWARMFORGE_SKIP_START" "1"
-                         "SWARMFORGE_GITHUB_BASE" (str github-base)}
-                   "--test-new-github-project" (str root) "acme/cave" "lieutenant" "m" branch)
+     (apply pack-web-env root {"SWARMFORGE_SKIP_START" "1"
+                               "SWARMFORGE_GITHUB_BASE" (str github-base)}
+            "--test-new-github-project" (str root) "acme/cave" "lieutenant" "m" branch
+            (when conf [conf]))
      (fs/path root "projects/cave"))))
 (defn plant-live-card-for-halt! [root roles]
   (setup-pack! root roles)

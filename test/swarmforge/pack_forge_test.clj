@@ -91,7 +91,7 @@
     (is (= "lieutenant" branch) (str "checked-out branch: " (pr-str branch)))
     (is (= "lieutenant\n" product-text) (str "product.txt: " (pr-str product-text)))))
 (deftest forge-new-project-with-a-blank-branch-clones-the-default-branch
-  (let [dest (new-lieutenant-subject! "")
+  (let [dest (new-lieutenant-subject! {:branch ""})
         branch (checked-out-branch dest)
         product-text (read-if-exists (fs/path dest "product.txt"))]
     (is (= "master" branch) (str "checked-out branch: " (pr-str branch)))
@@ -115,6 +115,13 @@
         "definition has no pack role prompts")
     (is (fs/exists? (fs/path definition "scripts/keep.sh"))
         "definition has no forge scripts")))
+(deftest forge-new-swarm-forge-subject-writes-a-posted-conf-to-the-definition
+  (let [posted-conf "window architect grok master\n"
+        dest (new-lieutenant-subject! {:conf posted-conf})
+        definition-conf (read-if-exists (fs/path dest ".swarmforge/definition/swarmforge/swarmforge.conf"))
+        tracked-conf (read-if-exists (fs/path dest "swarmforge/swarmforge.conf"))]
+    (is (= posted-conf definition-conf) (str "definition conf: " (pr-str definition-conf)))
+    (is (= "window tracked grok master\n" tracked-conf) (str "tracked conf: " (pr-str tracked-conf)))))
 (deftest forge-new-swarm-forge-subject-excludes-forge-files
   (let [dest (new-lieutenant-subject!)
         exclude-text (read-if-exists (fs/path dest ".git/info/exclude"))
