@@ -316,6 +316,30 @@
                 "window specifier grok master extra-flag\n")
     (write-file (fs/path dest ".swarmforge/definition/swarmforge/obsolete.txt") "old\n")
     dest))
+(defn seed-swarm-forge-source! [github-base]
+  (let [source (fs/path github-base "acme/cave")]
+    (fs/create-dirs source)
+    (run {:dir source} "git" "init" "-q")
+    (run {:dir source} "git" "config" "user.email" "test@example.com")
+    (run {:dir source} "git" "config" "user.name" "Test User")
+    (doseq [[name text] {".gitignore" ".swarmforge/\n.worktrees/\n"
+                         "product.txt" "default\n"
+                         "swarmforge/swarmforge.conf" "window tracked grok master\n"
+                         "swarmforge/constitution.prompt" "tracked constitution\n"
+                         "swarmforge/roles/tracked.prompt" "tracked\n"}]
+      (write-file (fs/path source name) text))
+    (run {:dir source} "git" "add" "-A")
+    (run {:dir source} "git" "commit" "-q" "-m" "Default branch")
+    (run {:dir source} "git" "checkout" "-q" "-b" "lieutenant")
+    (write-file (fs/path source "product.txt") "lieutenant\n")
+    (run {:dir source} "git" "commit" "-q" "-am" "Lieutenant branch")
+    (run {:dir source} "git" "checkout" "-q" "-")
+    source))
+(defn new-lieutenant-subject! [root github-base]
+  (pack-web-env root {"SWARMFORGE_SKIP_START" "1"
+                      "SWARMFORGE_GITHUB_BASE" (str github-base)}
+                "--test-new-github-project" (str root) "acme/cave" "lieutenant" "m" "lieutenant")
+  (fs/path root "projects/cave"))
 (defn plant-live-card-for-halt! [root roles]
   (setup-pack! root roles)
   (run {:dir root} "git" "init" "-q")

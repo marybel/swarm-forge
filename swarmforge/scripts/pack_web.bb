@@ -54,7 +54,7 @@
        "  pack_web.sh --test-teardown <root> [TEARDOWN]\n"
        "  pack_web.sh --test-new-project <root> <name> <pack> [mission]\n"
        "  pack_web.sh --test-new-project-replace <root> <name> <pack> [mission]\n"
-       "  pack_web.sh --test-new-github-project <root> <owner/repo> <pack> [mission]\n"
+       "  pack_web.sh --test-new-github-project <root> <owner/repo> <pack> [mission] [branch]\n"
        "  pack_web.sh --test-open-project <root> <name>\n"
        "  pack_web.sh --test-close-project <root> <name>\n"
        "  pack_web.sh --test-inferred-name <input> [github]\n"
