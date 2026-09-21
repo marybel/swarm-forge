@@ -223,7 +223,7 @@
               (fs/copy file (fs/path dest "swarmforge" "constitution" "articles" name)
                        {:replace-existing true}))))))))
 
-(defn overlay-pack! [forge dest _pack keep-conf?]
+(defn overlay-pack! [forge dest keep-conf?]
   (let [swarmforge-dir (fs/path dest "swarmforge")
         conf-file (fs/path swarmforge-dir "swarmforge.conf")
         saved-conf (when (and keep-conf? (fs/regular-file? conf-file))
@@ -311,7 +311,7 @@
 
 (declare close-project!)
 
-(defn instantiate! [forge {:keys [name github pack conf mission replace]}]
+(defn instantiate! [forge {:keys [name github conf mission replace]}]
   (let [dir-name (inferred-name name (boolean github))]
     (when (str/blank? dir-name)
       (throw (ex-info "Missing project name" {:http-status 400})))
@@ -333,7 +333,7 @@
           (if github
             (clone-github! (github-clone-url name) staging)
             (fs/create-dirs staging))
-          (overlay-pack! forge staging pack false)
+          (overlay-pack! forge staging false)
           (when-not (str/blank? conf)
             (fs/create-dirs (fs/path staging "swarmforge"))
             (spit (str (fs/path staging "swarmforge" "swarmforge.conf")) conf))
@@ -357,7 +357,7 @@
       (throw (ex-info (str "Unknown project: " name) {:http-status 404})))
     (when (str/blank? pack)
       (throw (ex-info (str "No pack recorded for " name) {:http-status 400})))
-    (overlay-pack! forge (safe-paths/definition-root dest) pack true)
+    (overlay-pack! forge (safe-paths/definition-root dest) true)
     {:name name :pack pack}))
 
 (defn skip-start? []
