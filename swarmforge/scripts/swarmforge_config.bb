@@ -18,6 +18,12 @@
 (def receive-modes #{"task" "batch"})
 (def propagation-modes #{"forward-only" "back-one" "back-all"})
 (def known-agents #{"claude" "codex" "copilot" "grok" "deepseek"})
+(def worktree-state-files
+  {:sessions-file "sessions.tsv"
+   :roles-file "roles.tsv"
+   :routes-file "routes.tsv"
+   :tmux-socket-file "tmux-socket"
+   :tmux-env-file "tmux-env"})
 
 (defn role-name? [value]
   (boolean (re-matches #"[A-Za-z][A-Za-z0-9-]*" (or value ""))))
@@ -313,18 +319,17 @@
              (fs/path worktree-path "swarmforge" "constitution.prompt")
              {:replace-existing true})))
 
+(defn sync-worktree-state! [ctx worktree-path]
+  (let [role-state-dir (fs/path worktree-path ".swarmforge")]
+    (fs/create-dirs (fs/path role-state-dir "notify"))
+    (doseq [[ctx-key file-name] worktree-state-files]
+      (fs/copy (ctx-key ctx) (fs/path role-state-dir file-name) {:replace-existing true}))))
+
 (defn sync-worktree-scripts! [ctx]
   (doseq [row (:roles ctx)
           :let [worktree-path (:worktree-path row)]
           :when (not= (str worktree-path) (str (:working-dir ctx)))]
-    (let [role-scripts-dir (fs/path worktree-path "swarmforge" "scripts")
-          role-state-dir (fs/path worktree-path ".swarmforge")]
-      (when-not (:definition-project? ctx)
-        (mirror-tree! (:script-dir ctx) role-scripts-dir)
-        (sync-worktree-roles! ctx worktree-path))
-      (fs/create-dirs (fs/path role-state-dir "notify"))
-      (fs/copy (:sessions-file ctx) (fs/path role-state-dir "sessions.tsv") {:replace-existing true})
-      (fs/copy (:roles-file ctx) (fs/path role-state-dir "roles.tsv") {:replace-existing true})
-      (fs/copy (:routes-file ctx) (fs/path role-state-dir "routes.tsv") {:replace-existing true})
-      (fs/copy (:tmux-socket-file ctx) (fs/path role-state-dir "tmux-socket") {:replace-existing true})
-      (fs/copy (:tmux-env-file ctx) (fs/path role-state-dir "tmux-env") {:replace-existing true}))))
+    (when-not (:definition-project? ctx)
+      (mirror-tree! (:script-dir ctx) (fs/path worktree-path "swarmforge" "scripts"))
+      (sync-worktree-roles! ctx worktree-path))
+    (sync-worktree-state! ctx worktree-path)))
