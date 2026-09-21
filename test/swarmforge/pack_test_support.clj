@@ -302,6 +302,20 @@
   (write-file (fs/path root ".swarmforge/project-pack/swarmforge/constitution.prompt") "pack-const\n")
   (write-file (fs/path root ".swarmforge/project-pack/swarmforge/roles/specifier.prompt") "spec\n")
   (write-file (fs/path root ".swarmforge/project-pack/swarmforge/roles/coder.prompt") "coder\n"))
+(defn head-sha [dir]
+  (str/trim (:out (run {:dir dir} "git" "rev-parse" "HEAD"))))
+(defn seed-definition-project! [root]
+  (let [dest (fs/path root "projects/cave")
+        env {"SWARMFORGE_SKIP_START" "1"}]
+    (pack-web-env root env "--test-new-project" (str root) "cave" "lieutenant" "m")
+    (pack-web-env root env "--test-close-project" (str root) "cave")
+    (write-file (fs/path dest "swarmforge/obsolete.txt") "tracked\n")
+    (run {:dir dest} "git" "add" "-A")
+    (run {:dir dest} "git" "commit" "-q" "-m" "Track obsolete file")
+    (write-file (fs/path dest ".swarmforge/definition/swarmforge/swarmforge.conf")
+                "window specifier grok master extra-flag\n")
+    (write-file (fs/path dest ".swarmforge/definition/swarmforge/obsolete.txt") "old\n")
+    dest))
 (defn plant-live-card-for-halt! [root roles]
   (setup-pack! root roles)
   (run {:dir root} "git" "init" "-q")

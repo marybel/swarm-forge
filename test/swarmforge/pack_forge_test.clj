@@ -143,6 +143,32 @@
       (is (= "keep me\n" (slurp (str (fs/path root "projects/cave/mission.md")))))
       (is (not (fs/exists? (fs/path root "projects/cave/swarmforge/obsolete.txt"))))
       (is (str/includes? (slurp (str conf)) "extra-flag")))))
+(deftest forge-open-leaves-head-and-tracked-swarmforge-alone-for-a-definition-project
+  (let [root (tmp-dir)]
+    (seed-mini-forge! root)
+    (let [dest (seed-definition-project! root)
+          head-before (head-sha dest)]
+      (pack-web-env root {"SWARMFORGE_SKIP_START" "1"} "--test-open-project" (str root) "cave")
+      (is (= head-before (head-sha dest))
+          (str "HEAD moved from " head-before " to " (head-sha dest)))
+      (is (= "" (str/trim (:out (run {:dir dest} "git" "status" "--porcelain"))))
+          (str "git status not clean: " (:out (run {:dir dest} "git" "status" "--porcelain"))))
+      (let [tracked (fs/path dest "swarmforge/obsolete.txt")
+            content (when (fs/exists? tracked) (slurp (str tracked)))]
+        (is (= "tracked\n" content)
+            (str "tracked swarmforge/obsolete.txt content: " (pr-str content)))))))
+(deftest forge-open-rebuilds-only-the-definition-directory
+  (let [root (tmp-dir)]
+    (seed-mini-forge! root)
+    (let [dest (seed-definition-project! root)
+          definition (fs/path dest ".swarmforge/definition/swarmforge")]
+      (pack-web-env root {"SWARMFORGE_SKIP_START" "1"} "--test-open-project" (str root) "cave")
+      (is (not (fs/exists? (fs/path definition "obsolete.txt")))
+          "stale definition file survived the rebuild")
+      (is (fs/exists? (fs/path definition "roles/specifier.prompt"))
+          "definition was not rebuilt with the pack's role prompts")
+      (is (str/includes? (slurp (str (fs/path definition "swarmforge.conf"))) "extra-flag")
+          (str "definition conf was not kept: " (slurp (str (fs/path definition "swarmforge.conf"))))))))
 (deftest forge-state-tags-attention-with-project
   (let [root (tmp-dir)]
     (seed-mini-forge! root)
