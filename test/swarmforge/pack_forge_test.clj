@@ -149,12 +149,14 @@
     (let [dest (seed-definition-project! root)
           head-before (head-sha dest)]
       (pack-web-env root {"SWARMFORGE_SKIP_START" "1"} "--test-open-project" (str root) "cave")
-      (is (= head-before (head-sha dest))
-          (str "HEAD moved from " head-before " to " (head-sha dest)))
-      (is (= "" (str/trim (:out (run {:dir dest} "git" "status" "--porcelain"))))
-          (str "git status not clean: " (:out (run {:dir dest} "git" "status" "--porcelain"))))
-      (let [tracked (fs/path dest "swarmforge/obsolete.txt")
+      (let [head-after (head-sha dest)
+            status (str/trim (:out (run {:dir dest} "git" "status" "--porcelain")))
+            tracked (fs/path dest "swarmforge/obsolete.txt")
             content (when (fs/exists? tracked) (slurp (str tracked)))]
+        (is (= head-before head-after)
+            (str "HEAD moved from " head-before " to " head-after))
+        (is (= "" status)
+            (str "git status not clean: " status))
         (is (= "tracked\n" content)
             (str "tracked swarmforge/obsolete.txt content: " (pr-str content)))))))
 (deftest forge-open-rebuilds-only-the-definition-directory
