@@ -301,23 +301,26 @@
                                              (str "&id=" id)))})))
   (flush))
 
-(defn test-new-project!
-  ([root name pack mission] (test-new-project! root name pack mission false false))
-  ([root name pack mission github replace]
-   (test-new-project! root name pack mission github replace nil nil))
-  ([root name pack mission github replace branch conf]
-   (test-http!
-    (handle-request (require-root! root)
-                    {:method "POST"
-                     :uri "/api/projects"
-                     :body (json/generate-string
-                            (cond-> {:name name
-                                     :pack pack
-                                     :mission (or mission "")
-                                     :github github
-                                     :replace replace}
-                              branch (assoc :branch branch)
-                              conf (assoc :conf conf)))}))))
+(defn test-new-project! [root {:keys [name pack mission github replace branch conf]}]
+  (test-http!
+   (handle-request (require-root! root)
+                   {:method "POST"
+                    :uri "/api/projects"
+                    :body (json/generate-string
+                           (cond-> {:name name
+                                    :pack pack
+                                    :mission (or mission "")
+                                    :github (boolean github)
+                                    :replace (boolean replace)}
+                             branch (assoc :branch branch)
+                             conf (assoc :conf conf)))})))
+
+(defn new-project-options [args]
+  {:name (nth args 2 nil)
+   :pack (nth args 3 nil)
+   :mission (nth args 4 nil)
+   :branch (nth args 5 nil)
+   :conf (nth args 6 nil)})
 
 (defn test-open-project! [root name]
   (test-http!
@@ -390,11 +393,11 @@
     "--test-save-comments" (test-save-comments! (second args) (nth args 2 nil) (nth args 3 nil) (nth args 4 nil))
     "--test-teardown" (test-teardown! (second args) (nth args 2 nil))
     "--test-teardown-throw" (test-teardown-throw! (second args))
-    "--test-new-project" (test-new-project! (second args) (nth args 2 nil) (nth args 3 nil) (nth args 4 nil))
-    "--test-new-project-replace" (test-new-project! (second args) (nth args 2 nil) (nth args 3 nil)
-                                                      (nth args 4 nil) false true)
-    "--test-new-github-project" (test-new-project! (second args) (nth args 2 nil) (nth args 3 nil)
-                                                     (nth args 4 nil) true false (nth args 5 nil) (nth args 6 nil))
+    "--test-new-project" (test-new-project! (second args) (new-project-options args))
+    "--test-new-project-replace" (test-new-project! (second args)
+                                                      (assoc (new-project-options args) :replace true))
+    "--test-new-github-project" (test-new-project! (second args)
+                                                     (assoc (new-project-options args) :github true))
     "--test-open-project" (test-open-project! (second args) (nth args 2 nil))
     "--test-close-project" (test-close-project! (second args) (nth args 2 nil))
     "--test-inferred-name" (test-inferred-name! (second args) (nth args 2 nil))
