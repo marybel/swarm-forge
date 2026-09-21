@@ -357,7 +357,7 @@
       (throw (ex-info (str "Unknown project: " name) {:http-status 404})))
     (when (str/blank? pack)
       (throw (ex-info (str "No pack recorded for " name) {:http-status 400})))
-    (overlay-pack! forge dest pack true)
+    (overlay-pack! forge (safe-paths/definition-root dest) pack true)
     {:name name :pack pack}))
 
 (defn skip-start? []
@@ -462,7 +462,9 @@
       (set-project-state! forge name "starting" "" {:managed-runtime (not (skip-start?))})
       (try
         (refresh! forge name)
-        (commit-managed-project-state! project)
+        (if (safe-paths/has-definition? project)
+          (ensure-git-identity! project)
+          (commit-managed-project-state! project))
         (if (skip-start?)
           (set-project-state! forge name "open" "" {:managed-runtime false})
           (do
