@@ -211,6 +211,7 @@
         tmux-socket-dir (fs/path "/tmp" (str "swarmforge-" (or (System/getenv "UID") (System/getProperty "user.name"))))
         tmux-socket (str (fs/path tmux-socket-dir (str socket-id ".sock")))]
     {:working-dir working-dir
+     :definition-project? (safe-paths/has-definition? working-dir)
      :script-dir script-dir
      :swarm-forge-dir swarm-forge-dir
      :worktrees-dir (fs/path working-dir ".worktrees")

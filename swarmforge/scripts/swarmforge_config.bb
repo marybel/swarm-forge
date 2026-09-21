@@ -319,8 +319,9 @@
           :when (not= (str worktree-path) (str (:working-dir ctx)))]
     (let [role-scripts-dir (fs/path worktree-path "swarmforge" "scripts")
           role-state-dir (fs/path worktree-path ".swarmforge")]
-      (mirror-tree! (:script-dir ctx) role-scripts-dir)
-      (sync-worktree-roles! ctx worktree-path)
+      (when-not (:definition-project? ctx)
+        (mirror-tree! (:script-dir ctx) role-scripts-dir)
+        (sync-worktree-roles! ctx worktree-path))
       (fs/create-dirs (fs/path role-state-dir "notify"))
       (fs/copy (:sessions-file ctx) (fs/path role-state-dir "sessions.tsv") {:replace-existing true})
       (fs/copy (:roles-file ctx) (fs/path role-state-dir "roles.tsv") {:replace-existing true})
