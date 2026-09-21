@@ -25,6 +25,25 @@
         (is (fs/exists? (fs/path root ".swarmforge/tmux-socket"))))
       (finally
         (fs/delete-tree root)))))
+(deftest swarmforge-reads-definition-directory-instead-of-tracked-swarmforge
+  (let [root (tmp-dir)]
+    (try
+      (write-file (fs/path root "swarmforge/constitution.prompt") "Tracked constitution.\n")
+      (write-file (fs/path root "swarmforge/swarmforge.conf") "window coder codex master\n")
+      (write-file (fs/path root "swarmforge/roles/coder.prompt") "coder\n")
+      (write-file (fs/path root ".swarmforge/definition/swarmforge/constitution.prompt")
+                  "Definition constitution.\n")
+      (write-file (fs/path root ".swarmforge/definition/swarmforge/swarmforge.conf")
+                  "window architect codex master\n")
+      (write-file (fs/path root ".swarmforge/definition/swarmforge/roles/architect.prompt")
+                  "architect\n")
+      (let [result (run {:dir root :ok? false} (script "swarmforge.bb") "--test-parse" (str root))]
+        (is (str/includes? (:out result) "architect Architect")
+            (str "definition role missing from --test-parse output: " (pr-str result)))
+        (is (not (str/includes? (:out result) "coder Coder"))
+            (str "tracked swarmforge/ role leaked into --test-parse output: " (pr-str result))))
+      (finally
+        (fs/delete-tree root)))))
 (deftest swarmforge-writes-configured-card-routes
   (let [root (tmp-dir)]
     (try
