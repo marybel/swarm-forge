@@ -87,6 +87,9 @@
     (and (zero? (:exit result))
          (= (:out result) (slurp (str file))))))
 
+(defn task-document-excluded? [root relative-path]
+  (zero? (:exit (command "git" "-C" root "check-ignore" "-q" "--" relative-path))))
+
 (defn task-document-fail! [message]
   (binding [*out* *err*]
     (println message))
@@ -114,7 +117,8 @@
           (when-not (same-path? source destination)
             (fs/create-dirs (fs/parent destination))
             (fs/copy source destination {:replace-existing true}))
-          (when-not (task-document-committed? worktree relative-path destination)
+          (when-not (or (task-document-excluded? worktree relative-path)
+                        (task-document-committed? worktree relative-path destination))
             (commit-task-document! worktree relative-path destination)))))))
 
 (defn header-map [file]
