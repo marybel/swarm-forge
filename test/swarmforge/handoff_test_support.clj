@@ -218,6 +218,22 @@
     (fs/create-dirs (fs/parent wt))
     (run {:dir root} "git" "worktree" "add" "-q" (str wt) "HEAD")
     wt))
+(defn seed-operator-task-document! [root receiver document]
+  (setup-project! root {"receiver" "task"})
+  (write-file (fs/path root ".swarmforge/roles.tsv")
+              (format "receiver\treceiver\t%s\tsession\tReceiver\tcodex\ttask\n"
+                      receiver))
+  (write-file (fs/path root "tasks/Utility task.md") document)
+  (put-handoff! receiver "new" "50_utility.handoff"
+                {:id "utility"
+                 :from "(New Task)"
+                 :to "receiver"
+                 :recipient "receiver"
+                 :priority "50"
+                 :type "note"
+                 :task-id "utility-id"
+                 :task "Utility task"
+                 :body "Build the shim."}))
 (defn pack-board
   ([root ok? & args]
    (apply run {:dir root :ok? ok?} (script "pack_board.sh") args)))

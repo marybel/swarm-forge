@@ -46,21 +46,7 @@
         _ (init-repo! root)
         receiver (add-worktree! root "receiver")
         document "# Utility task\n\nType: utility\n\nBuild the shim.\n"]
-    (setup-project! root {"receiver" "task"})
-    (write-file (fs/path root ".swarmforge/roles.tsv")
-                (format "receiver\treceiver\t%s\tsession\tReceiver\tcodex\ttask\n"
-                        receiver))
-    (write-file (fs/path root "tasks/Utility task.md") document)
-    (put-handoff! receiver "new" "50_utility.handoff"
-                  {:id "utility"
-                   :from "(New Task)"
-                   :to "receiver"
-                   :recipient "receiver"
-                   :priority "50"
-                   :type "note"
-                   :task-id "utility-id"
-                   :task "Utility task"
-                   :body "Build the shim."})
+    (seed-operator-task-document! root receiver document)
     (let [result (run {:dir receiver :env {"SWARMFORGE_ROLE" "receiver"}}
                       (script "ready_for_next.sh"))
           committed (run {:dir receiver}
@@ -73,32 +59,19 @@
         _ (init-repo! root)
         receiver (add-worktree! root "receiver")
         document "# Utility task\n\nType: utility\n\nBuild the shim.\n"]
-    (setup-project! root {"receiver" "task"})
-    (write-file (fs/path root ".swarmforge/roles.tsv")
-                (format "receiver\treceiver\t%s\tsession\tReceiver\tcodex\ttask\n"
-                        receiver))
+    (seed-operator-task-document! root receiver document)
     (write-file (fs/path root ".git/info/exclude") "/tasks/\n")
-    (write-file (fs/path root "tasks/Utility task.md") document)
-    (put-handoff! receiver "new" "50_utility.handoff"
-                  {:id "utility"
-                   :from "(New Task)"
-                   :to "receiver"
-                   :recipient "receiver"
-                   :priority "50"
-                   :type "note"
-                   :task-id "utility-id"
-                   :task "Utility task"
-                   :body "Build the shim."})
     (let [head-before (head-sha receiver)
           result (run {:dir receiver :env {"SWARMFORGE_ROLE" "receiver"} :ok? false}
                       (script "ready_for_next.sh"))
+          head-after (head-sha receiver)
           copied (fs/path receiver "tasks/Utility task.md")
           copied-text (when (fs/exists? copied) (read-file copied))]
       (is (zero? (:exit result)) (str (:err result) (:out result)))
       (is (= document copied-text)
           (str "task document in the worktree: " (pr-str copied-text)))
-      (is (= head-before (head-sha receiver))
-          (str "HEAD moved from " head-before " to " (head-sha receiver))))))
+      (is (= head-before head-after)
+          (str "HEAD moved from " head-before " to " head-after)))))
 (deftest ready-for-next-batch-commits-each-operator-task-document
   (let [root (tmp-dir)
         _ (init-repo! root)
