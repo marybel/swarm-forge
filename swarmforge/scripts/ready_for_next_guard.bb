@@ -95,16 +95,14 @@
     (println message))
   (System/exit 1))
 
-(defn commit-task-document! [root relative-path file]
-  (let [add-result (command "git" "-C" root "add" "--" relative-path)]
-    (when-not (zero? (:exit add-result))
-      (task-document-fail!
-       (str/trim (str (:err add-result) "\n" (:out add-result)))))
-    (let [commit-result (command "git" "-C" root "commit" "--only"
-                                 "-m" "Record task document" "--" relative-path)]
-      (when-not (zero? (:exit commit-result))
-        (task-document-fail!
-         (str/trim (str (:err commit-result) "\n" (:out commit-result))))))))
+(defn require-git-success! [result]
+  (when-not (zero? (:exit result))
+    (task-document-fail! (str/trim (str (:err result) "\n" (:out result))))))
+
+(defn commit-task-document! [root relative-path]
+  (require-git-success! (command "git" "-C" root "add" "--" relative-path))
+  (require-git-success! (command "git" "-C" root "commit" "--only"
+                                 "-m" "Record task document" "--" relative-path)))
 
 (defn ensure-task-document-committed! [handoff-file]
   (when-let [relative-path (task-document-relative-path
@@ -119,7 +117,7 @@
             (fs/copy source destination {:replace-existing true}))
           (when-not (or (task-document-excluded? worktree relative-path)
                         (task-document-committed? worktree relative-path destination))
-            (commit-task-document! worktree relative-path destination)))))))
+            (commit-task-document! worktree relative-path)))))))
 
 (defn header-map [file]
   (into {}
