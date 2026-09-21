@@ -85,56 +85,40 @@
       (is (str/includes? ignore "# BEGIN SWARMFORGE RUNTIME"))
       (is (= "" (str/trim (:out (run {:dir dest} "git" "status" "--porcelain"))))))))
 (deftest forge-new-project-clones-the-requested-branch
-  (let [root (tmp-dir)
-        github-base (tmp-dir)]
-    (seed-mini-forge! root)
-    (seed-swarm-forge-source! github-base)
-    (let [dest (new-lieutenant-subject! root github-base)
-          branch (str/trim (:out (run {:dir dest} "git" "branch" "--show-current")))
-          product (fs/path dest "product.txt")
-          product-text (when (fs/exists? product) (slurp (str product)))]
-      (is (= "lieutenant" branch) (str "checked-out branch: " (pr-str branch)))
-      (is (= "lieutenant\n" product-text) (str "product.txt: " (pr-str product-text))))))
+  (let [dest (new-lieutenant-subject!)
+        branch (str/trim (:out (run {:dir dest} "git" "branch" "--show-current")))
+        product (fs/path dest "product.txt")
+        product-text (when (fs/exists? product) (slurp (str product)))]
+    (is (= "lieutenant" branch) (str "checked-out branch: " (pr-str branch)))
+    (is (= "lieutenant\n" product-text) (str "product.txt: " (pr-str product-text)))))
 (deftest forge-new-swarm-forge-subject-keeps-tracked-files-and-history
-  (let [root (tmp-dir)
-        github-base (tmp-dir)
-        source (seed-swarm-forge-source! github-base)]
-    (seed-mini-forge! root)
-    (let [dest (new-lieutenant-subject! root github-base)
-          source-tip (str/trim (:out (run {:dir source} "git" "rev-parse" "lieutenant")))
-          head (head-sha dest)
-          status (str/trim (:out (run {:dir dest} "git" "status" "--porcelain")))
-          ignore (fs/path dest ".gitignore")
-          ignore-text (when (fs/exists? ignore) (slurp (str ignore)))]
-      (is (= source-tip head) (str "HEAD " head " is not the source tip " source-tip))
-      (is (= "" status) (str "git status not clean: " status))
-      (is (= ".swarmforge/\n.worktrees/\n" ignore-text) (str ".gitignore: " (pr-str ignore-text))))))
+  (let [dest (new-lieutenant-subject!)
+        source-tip (str/trim (:out (run {:dir dest} "git" "rev-parse" "origin/lieutenant")))
+        head (head-sha dest)
+        status (str/trim (:out (run {:dir dest} "git" "status" "--porcelain")))
+        ignore (fs/path dest ".gitignore")
+        ignore-text (when (fs/exists? ignore) (slurp (str ignore)))]
+    (is (= source-tip head) (str "HEAD " head " is not the source tip " source-tip))
+    (is (= "" status) (str "git status not clean: " status))
+    (is (= ".swarmforge/\n.worktrees/\n" ignore-text) (str ".gitignore: " (pr-str ignore-text)))))
 (deftest forge-new-swarm-forge-subject-creates-the-definition-directory
-  (let [root (tmp-dir)
-        github-base (tmp-dir)]
-    (seed-mini-forge! root)
-    (seed-swarm-forge-source! github-base)
-    (let [dest (new-lieutenant-subject! root github-base)
-          definition (fs/path dest ".swarmforge/definition/swarmforge")
-          conf (fs/path definition "swarmforge.conf")
-          conf-text (when (fs/exists? conf) (slurp (str conf)))]
-      (is (= "window specifier grok master\nwindow coder grok coder\n" conf-text)
-          (str "definition conf: " (pr-str conf-text)))
-      (is (fs/exists? (fs/path definition "roles/specifier.prompt"))
-          "definition has no pack role prompts")
-      (is (fs/exists? (fs/path definition "scripts/keep.sh"))
-          "definition has no forge scripts"))))
+  (let [dest (new-lieutenant-subject!)
+        definition (fs/path dest ".swarmforge/definition/swarmforge")
+        conf (fs/path definition "swarmforge.conf")
+        conf-text (when (fs/exists? conf) (slurp (str conf)))]
+    (is (= "window specifier grok master\nwindow coder grok coder\n" conf-text)
+        (str "definition conf: " (pr-str conf-text)))
+    (is (fs/exists? (fs/path definition "roles/specifier.prompt"))
+        "definition has no pack role prompts")
+    (is (fs/exists? (fs/path definition "scripts/keep.sh"))
+        "definition has no forge scripts")))
 (deftest forge-new-swarm-forge-subject-excludes-forge-files
-  (let [root (tmp-dir)
-        github-base (tmp-dir)]
-    (seed-mini-forge! root)
-    (seed-swarm-forge-source! github-base)
-    (let [dest (new-lieutenant-subject! root github-base)
-          exclude (fs/path dest ".git/info/exclude")
-          lines (set (when (fs/exists? exclude) (str/split-lines (slurp (str exclude)))))]
-      (doseq [pattern ["/tasks/" "/tmp/" "/mission.md"]]
-        (is (contains? lines pattern)
-            (str pattern " missing from .git/info/exclude: " (pr-str lines)))))))
+  (let [dest (new-lieutenant-subject!)
+        exclude (fs/path dest ".git/info/exclude")
+        lines (set (when (fs/exists? exclude) (str/split-lines (slurp (str exclude)))))]
+    (doseq [pattern ["/tasks/" "/tmp/" "/mission.md"]]
+      (is (contains? lines pattern)
+          (str pattern " missing from .git/info/exclude: " (pr-str lines))))))
 (deftest forge-open-already-open-alerts
   (let [root (tmp-dir)]
     (seed-mini-forge! root)
