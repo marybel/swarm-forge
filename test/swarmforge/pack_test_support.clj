@@ -334,15 +334,17 @@
     (write-file (fs/path source "product.txt") "lieutenant\n")
     (run {:dir source} "git" "commit" "-q" "-am" "Lieutenant branch")
     (run {:dir source} "git" "checkout" "-q" "-")))
-(defn new-lieutenant-subject! []
-  (let [root (tmp-dir)
-        github-base (tmp-dir)]
-    (seed-mini-forge! root)
-    (seed-swarm-forge-source! github-base)
-    (pack-web-env root {"SWARMFORGE_SKIP_START" "1"
-                        "SWARMFORGE_GITHUB_BASE" (str github-base)}
-                  "--test-new-github-project" (str root) "acme/cave" "lieutenant" "m" "lieutenant")
-    (fs/path root "projects/cave")))
+(defn new-lieutenant-subject!
+  ([] (new-lieutenant-subject! "lieutenant"))
+  ([branch]
+   (let [root (tmp-dir)
+         github-base (tmp-dir)]
+     (seed-mini-forge! root)
+     (seed-swarm-forge-source! github-base)
+     (pack-web-env root {"SWARMFORGE_SKIP_START" "1"
+                         "SWARMFORGE_GITHUB_BASE" (str github-base)}
+                   "--test-new-github-project" (str root) "acme/cave" "lieutenant" "m" branch)
+     (fs/path root "projects/cave"))))
 (defn plant-live-card-for-halt! [root roles]
   (setup-pack! root roles)
   (run {:dir root} "git" "init" "-q")

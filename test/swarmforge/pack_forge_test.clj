@@ -91,6 +91,13 @@
         product-text (when (fs/exists? product) (slurp (str product)))]
     (is (= "lieutenant" branch) (str "checked-out branch: " (pr-str branch)))
     (is (= "lieutenant\n" product-text) (str "product.txt: " (pr-str product-text)))))
+(deftest forge-new-project-with-a-blank-branch-clones-the-default-branch
+  (let [dest (new-lieutenant-subject! "")
+        branch (str/trim (:out (run {:dir dest} "git" "branch" "--show-current")))
+        product (fs/path dest "product.txt")
+        product-text (when (fs/exists? product) (slurp (str product)))]
+    (is (= "master" branch) (str "checked-out branch: " (pr-str branch)))
+    (is (= "default\n" product-text) (str "product.txt: " (pr-str product-text)))))
 (deftest forge-new-swarm-forge-subject-keeps-tracked-files-and-history
   (let [dest (new-lieutenant-subject!)
         source-tip (str/trim (:out (run {:dir dest} "git" "rev-parse" "origin/lieutenant")))
