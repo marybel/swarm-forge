@@ -59,7 +59,7 @@
              {:replace-existing true})
     (spit (str prompt-file)
           (str "Read swarmforge/constitution.prompt, then read every file it refers to recursively, and obey all of those instructions.\n"
-               "Read swarmforge/roles/" role ".prompt, then read every file it refers to recursively, and follow all of those instructions.\n"
+               "Read .swarmforge/project-pack/swarmforge/roles/" role ".prompt, then read every file it refers to recursively, and follow all of those instructions.\n"
                "\n"
                (tool-startup-section role last-role?)))))
 
