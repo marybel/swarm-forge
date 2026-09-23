@@ -599,6 +599,32 @@
       (is (zero? (:exit result)) (str (:err result) (:out result)))
       (is (some? (queued-path (:out result))))
       (is (= document (read-file (fs/path root "tasks/Excluded task.md")))))))
+(deftest swarm-handoff-still-excludes-a-previously-force-committed-task-document
+  ;; Given tasks/ is excluded but a historical force-add already tracked the
+  ;; task document (the force-add-past-the-exclude workaround pattern)
+  ;; When a later git_handoff's result commit does not touch that document
+  ;; Then the handoff is still allowed, not blocked as missing or stale
+  (let [root (tmp-dir)
+        _ (init-repo! root)
+        _ (setup-project! root)
+        task-id "excluded-task-id"
+        _ (write-file (fs/path root ".swarmforge/board/tasks.tsv")
+                      (str "Excluded task\tsender\tcreated\tupdated\t" task-id
+                           "\t0\tcomponent\n"))
+        document "# Excluded task\n\nType: component\n\nPreserve this intent.\n"
+        _ (write-file (fs/path root ".git/info/exclude") "/tasks/\n")
+        _ (write-file (fs/path root "tasks/Excluded task.md") document)
+        _ (run {:dir root} "git" "add" "-f" "--" "tasks/Excluded task.md")
+        _ (run {:dir root} "git" "commit" "-q" "-m" "Force-commit excluded doc")
+        _ (write-file (fs/path root "slice.md") "work\n")
+        _ (run {:dir root} "git" "add" "slice.md")
+        _ (run {:dir root} "git" "commit" "-q" "-m" "Add work")
+        draft (fs/path root "tmp" "excluded-task.handoff")]
+    (write-file draft "type: git_handoff\nto: receiver\npriority: 50\ntask: Excluded task\n")
+    (let [result (audit-and-submit-git-handoff
+                  {:dir root :env {"SWARMFORGE_ROLE" "sender"}} draft)]
+      (is (zero? (:exit result)) (str (:err result) (:out result)))
+      (is (some? (queued-path (:out result)))))))
 (deftest swarm-handoff-excludes-deleted-artifacts
   ;; Given a commit deletes one file and changes another
   ;; When it is queued

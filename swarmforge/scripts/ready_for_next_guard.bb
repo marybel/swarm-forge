@@ -88,7 +88,7 @@
          (= (:out result) (slurp (str file))))))
 
 (defn task-document-excluded? [root relative-path]
-  (zero? (:exit (command "git" "-C" root "check-ignore" "-q" "--" relative-path))))
+  (zero? (:exit (command "git" "-C" root "check-ignore" "-q" "--no-index" "--" relative-path))))
 
 (defn task-document-fail! [message]
   (binding [*out* *err*]
