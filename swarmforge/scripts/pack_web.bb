@@ -10,7 +10,12 @@
             [clojure.string :as str]
             [org.httpkit.server :as http]))
 
-(def script-dir (fs/parent *file*))
+;; *file* has no parent segment when this ns is `require`d from the
+;; classpath (as the in-process coverage test does) instead of invoked
+;; directly; fall back to the classpath resource location.
+(def script-dir
+  (or (fs/parent *file*)
+      (some-> (io/resource *file*) io/file .getParent fs/path)))
 (try
   (require 'safe-paths)
   (catch Exception _

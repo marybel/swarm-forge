@@ -4,6 +4,7 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]))
 
 (def session-prefix "swarmforge")
@@ -144,7 +145,12 @@
     (sh "git" "-C" (str (:working-dir ctx)) "commit" "-m" "Initial swarmforge repository")))
 
 
-(def swarmforge-script-dir (fs/parent *file*))
+;; *file* has no parent segment when this ns is `require`d from the
+;; classpath (as the in-process coverage test does) instead of invoked
+;; directly; fall back to the classpath resource location.
+(def swarmforge-script-dir
+  (or (fs/parent *file*)
+      (some-> (io/resource *file*) io/file .getParent fs/path)))
 (load-file (str (fs/path swarmforge-script-dir "swarmforge_config.bb")))
 
 (def agent-required-command

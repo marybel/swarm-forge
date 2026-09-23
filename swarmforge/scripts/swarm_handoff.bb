@@ -3,6 +3,7 @@
 (ns swarm-handoff
   (:require [babashka.fs :as fs]
             [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.java.shell :refer [sh]]
             [clojure.set :as set]
             [clojure.string :as str])
@@ -34,7 +35,12 @@
                        "delivery_kind" "card_type" "batch_id" "batch_task_ids"})
 (def allowed-fields #{"type" "to" "priority" "task_id" "task" "commit" "message"})
 (def allowed-types #{"git_handoff" "note"})
-(def script-dir (fs/parent *file*))
+;; *file* has no parent segment when this ns is `require`d from the
+;; classpath (as the in-process coverage test does) instead of invoked
+;; directly; fall back to the classpath resource location.
+(def script-dir
+  (or (fs/parent *file*)
+      (some-> (io/resource *file*) io/file .getParent fs/path)))
 (try
   (require 'handoff-lib)
   (catch Exception _

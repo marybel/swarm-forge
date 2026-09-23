@@ -3,6 +3,7 @@
 (ns pack-board
   (:require [babashka.fs :as fs]
             [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.java.shell :refer [sh]]
             [clojure.string :as str])
   (:import [java.nio.channels FileChannel]
@@ -37,7 +38,12 @@
             "--caller" :caller "--archive" :archive "--act" :act
             "--merge-from" :merge-from "--waiting" :waiting})
 (def bool-flags #{"--waiting"})
-(def script-dir (fs/parent *file*))
+;; *file* has no parent segment when this ns is `require`d from the
+;; classpath (as the in-process coverage test does) instead of invoked
+;; directly; fall back to the classpath resource location.
+(def script-dir
+  (or (fs/parent *file*)
+      (some-> (io/resource *file*) io/file .getParent fs/path)))
 (try
   (require 'handoff-lib)
   (catch Exception _
