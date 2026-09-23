@@ -18,3 +18,7 @@ own cloverage wrapper scoped with `--test-ns-regex` to
 `coverage-in-process-test` so subprocess-covered code isn't miscounted as
 untested. `bb crap` is crap4clj itself invoked through Babashka's task
 runner, not a homegrown proxy for it.
+
+Keep the existing `test/*.clj` clojure.test suite as-is; it originates
+upstream, not from this fork. Write any new test as a Speclj spec, per the
+constitution's Speclj-only rule for Clojure and Babashka projects.
