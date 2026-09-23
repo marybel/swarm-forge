@@ -150,13 +150,17 @@
 (defn committed-task-document [commit relative-path]
   (command (git-cwd) "git" "show" (str commit ":" relative-path)))
 
+(defn task-document-excluded? [relative-path]
+  (zero? (:exit (command (project-root) "git" "check-ignore" "-q" "--" relative-path))))
+
 (defn task-document-errors [headers canonical-commit]
   (if-not (= "git_handoff" (get headers "type"))
     []
     (let [relative-path (task-document-relative-path (get headers "task"))
           source (when relative-path (fs/path (project-root) relative-path))]
       (if-not (and relative-path (fs/regular-file? source)
-                   (not (str/blank? canonical-commit)))
+                   (not (str/blank? canonical-commit))
+                   (not (task-document-excluded? relative-path)))
         []
         (let [committed (committed-task-document canonical-commit relative-path)]
           (cond
