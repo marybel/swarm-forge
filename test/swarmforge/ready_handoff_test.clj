@@ -72,6 +72,30 @@
           (str "task document in the worktree: " (pr-str copied-text)))
       (is (= head-before head-after)
           (str "HEAD moved from " head-before " to " head-after)))))
+(deftest ready-for-next-does-not-recommit-an-already-tracked-excluded-document
+  ;; Given a project excludes tasks/, but a prior force-commit already tracked
+  ;; the task document (the historical force-add-past-the-exclude workaround)
+  ;; When ready_for_next runs with an updated task document
+  ;; Then it copies the new content but does not create a new commit
+  (let [root (tmp-dir)
+        _ (init-repo! root)
+        receiver (add-worktree! root "receiver")
+        stale-document "# Utility task\n\nType: utility\n\nOld body.\n"
+        document "# Utility task\n\nType: utility\n\nBuild the shim.\n"]
+    (write-file (fs/path root ".git/info/exclude") "/tasks/\n")
+    (write-file (fs/path receiver "tasks/Utility task.md") stale-document)
+    (run {:dir receiver} "git" "add" "-f" "--" "tasks/Utility task.md")
+    (run {:dir receiver} "git" "commit" "-q" "-m" "Force-commit stale doc")
+    (seed-operator-task-document! root receiver document)
+    (let [head-before (head-sha receiver)
+          result (run {:dir receiver :env {"SWARMFORGE_ROLE" "receiver"} :ok? false}
+                      (script "ready_for_next.sh"))
+          head-after (head-sha receiver)]
+      (is (zero? (:exit result)) (str (:err result) (:out result)))
+      (is (= document (read-file (fs/path receiver "tasks/Utility task.md"))))
+      (is (= head-before head-after)
+          (str "HEAD moved from " head-before " to " head-after
+               " even though the project excludes tasks/")))))
 (deftest ready-for-next-batch-commits-each-operator-task-document
   (let [root (tmp-dir)
         _ (init-repo! root)

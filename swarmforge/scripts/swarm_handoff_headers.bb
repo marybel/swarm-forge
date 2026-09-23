@@ -151,7 +151,7 @@
   (command (git-cwd) "git" "show" (str commit ":" relative-path)))
 
 (defn task-document-excluded? [relative-path]
-  (zero? (:exit (command (project-root) "git" "check-ignore" "-q" "--" relative-path))))
+  (zero? (:exit (command (project-root) "git" "check-ignore" "-q" "--no-index" "--" relative-path))))
 
 (defn task-document-errors [headers canonical-commit]
   (if-not (= "git_handoff" (get headers "type"))
