@@ -635,55 +635,71 @@
     (and (= (get source-headers "id") (get target-headers "id"))
          (= recipient (get target-headers "recipient")))))
 
+(defn validate-header-fields!
+  "Pure header-shape checks: no filesystem or roles access."
+  [headers sender-role]
+  (when (str/blank? (get headers "id"))
+    (throw (permanent-error "missing id header")))
+  (try
+    (safe-paths/require-internal-id! (get headers "id"))
+    (catch Exception _
+      (throw (permanent-error "invalid id header"))))
+  (when (str/blank? sender-role)
+    (throw (permanent-error "missing from header")))
+  (when-not (#{"git_handoff" "note"} (get headers "type"))
+    (throw (permanent-error "missing or invalid type header")))
+  (when-not (re-matches #"[0-9][0-9]" (or (get headers "priority") ""))
+    (throw (permanent-error "missing or invalid priority header")))
+  (when (and (= "git_handoff" (get headers "type"))
+             (str/blank? (task-key headers)))
+    (throw (permanent-error "missing task header")))
+  (when (and (= "git_handoff" (get headers "type"))
+             (not (valid-batch-task-ids? headers)))
+    (throw (permanent-error "invalid batch_task_ids header")))
+  (when (and (= "git_handoff" (get headers "type"))
+             (not (valid-batch-id? headers)))
+    (throw (permanent-error "invalid batch_id header"))))
+
+(defn validate-board-task-keys! [headers]
+  (when (and (= "git_handoff" (get headers "type"))
+             (fs/regular-file? (board-file)))
+    (doseq [key (batch-task-keys headers)]
+      (when-not (safe-paths/state-key? key)
+        (throw (permanent-error "invalid board task key")))
+      (when-not (board-row-for-key key)
+        (throw (permanent-error (str "unknown board task " key)))))))
+
+(defn validate-recipient-set!
+  "Pure recipient-shape checks: no filesystem or roles access."
+  [recipients]
+  (when (or (empty? recipients) (some str/blank? recipients))
+    (throw (permanent-error "missing or empty recipient")))
+  (when-not (= (count recipients) (count (distinct recipients)))
+    (throw (permanent-error "duplicate recipient"))))
+
+(defn validate-recipients! [roles recipients headers filename]
+  (doseq [recipient recipients]
+    (let [role-info (get roles recipient)]
+      (when-not role-info
+        (throw (permanent-error (str "unknown recipient " recipient))))
+      (when-not (fs/directory? (:worktree-path role-info))
+        (throw (ex-info (str "recipient worktree unavailable: " recipient) {})))
+      (let [target (target-path role-info filename)]
+        (when (and (fs/exists? target)
+                   (not (same-delivery? headers target recipient)))
+          (throw (permanent-error (str "conflicting recipient file " target))))))))
+
 (defn preflight! [roles sender-role path message]
   (let [headers (:headers message)
         recipients (raw-recipients headers)
         filename (fs/file-name path)]
-    (when (str/blank? (get headers "id"))
-      (throw (permanent-error "missing id header")))
-    (try
-      (safe-paths/require-internal-id! (get headers "id"))
-      (catch Exception _
-        (throw (permanent-error "invalid id header"))))
-    (when (str/blank? sender-role)
-      (throw (permanent-error "missing from header")))
-    (when-not (#{"git_handoff" "note"} (get headers "type"))
-      (throw (permanent-error "missing or invalid type header")))
-    (when-not (re-matches #"[0-9][0-9]" (or (get headers "priority") ""))
-      (throw (permanent-error "missing or invalid priority header")))
-    (when (and (= "git_handoff" (get headers "type"))
-               (str/blank? (task-key headers)))
-      (throw (permanent-error "missing task header")))
-    (when (and (= "git_handoff" (get headers "type"))
-               (not (valid-batch-task-ids? headers)))
-      (throw (permanent-error "invalid batch_task_ids header")))
-    (when (and (= "git_handoff" (get headers "type"))
-               (not (valid-batch-id? headers)))
-      (throw (permanent-error "invalid batch_id header")))
-    (when (and (= "git_handoff" (get headers "type"))
-               (fs/regular-file? (board-file)))
-      (doseq [key (batch-task-keys headers)]
-        (when-not (safe-paths/state-key? key)
-          (throw (permanent-error "invalid board task key")))
-        (when-not (board-row-for-key key)
-          (throw (permanent-error (str "unknown board task " key))))))
-    (when (or (empty? recipients) (some str/blank? recipients))
-      (throw (permanent-error "missing or empty recipient")))
-    (when-not (= (count recipients) (count (distinct recipients)))
-      (throw (permanent-error "duplicate recipient")))
+    (validate-header-fields! headers sender-role)
+    (validate-board-task-keys! headers)
+    (validate-recipient-set! recipients)
     (validate-delivery-kind! headers recipients)
     (when (and (not (phantom-sender? sender-role)) (nil? (get roles sender-role)))
       (throw (permanent-error (str "unknown sender " sender-role))))
-    (doseq [recipient recipients]
-      (let [role-info (get roles recipient)]
-        (when-not role-info
-          (throw (permanent-error (str "unknown recipient " recipient))))
-        (when-not (fs/directory? (:worktree-path role-info))
-          (throw (ex-info (str "recipient worktree unavailable: " recipient) {})))
-        (let [target (target-path role-info filename)]
-          (when (and (fs/exists? target)
-                     (not (same-delivery? headers target recipient)))
-            (throw (permanent-error (str "conflicting recipient file " target)))))))
+    (validate-recipients! roles recipients headers filename)
     recipients))
 
 (defn store-recipient! [message role-info recipient filename]

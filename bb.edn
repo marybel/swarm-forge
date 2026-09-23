@@ -1,6 +1,15 @@
 {:paths ["test" "swarmforge/scripts"]
  :tasks
- {test {:doc "Run helper tests and dashboard Playwright tests"
+ {spec {:doc "Run Speclj specs (spec/) against swarmforge/scripts"
+        :task (let [result (babashka.process/shell
+                             {:continue true}
+                             "clojure" "-Sdeps"
+                             (str "{:paths [\"spec\" \"test\"]"
+                                  " :deps {speclj/speclj {:mvn/version \"3.13.0\"}"
+                                  " babashka/fs {:mvn/version \"0.5.22\"}}}")
+                             "-M" "-m" "speclj.main" "-c" "spec")]
+                (System/exit (or (:exit result) 1)))}
+  test {:doc "Run helper tests and dashboard Playwright tests"
         :task (do
                 (require 'clojure.test)
                 (require 'swarmforge.swarm-handoff-test)
