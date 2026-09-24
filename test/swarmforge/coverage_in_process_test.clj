@@ -511,23 +511,35 @@
         (fs/delete-tree root)))))
 
 (deftest swarmforge-launch-role-trusts-the-worktree-for-claude-and-codex-backends
-  (let [trusted (atom [])
+  (let [home (tmp-dir)
         sent (atom [])
-        ctx {:tmux-socket "sock" :tmux-pane-base-index 0}
+        claude-config (fs/path home "claude.json")
         launch (fn [agent]
-                 (with-redefs [swarmforge/ensure-codex-trust! #(swap! trusted conj [:codex %])
-                               swarmforge/ensure-claude-trust! #(swap! trusted conj [:claude %])
+                 (with-redefs [swarmforge/claude-config-file (constantly (str claude-config))
+                               swarmforge/claude-settings-file (constantly (str (fs/path home "settings.json")))
                                swarmforge/launch-command (constantly "the-command")
                                swarmforge/sh (fn [& args] (swap! sent conj (vec args)))]
                    (with-out-str
-                     (swarmforge/launch-role! ctx 1 {:agent agent :worktree-path "wt"
-                                                     :session "swarmforge-coder" :display-name "Coder"}))))]
-    (launch "deepseek")
-    (launch "claude")
-    (launch "grok")
-    (is (= [[:codex "wt"] [:claude "wt"]] @trusted))
-    (is (= ["tmux" "-S" "sock" "send-keys" "-t" "swarmforge-coder:Coder.0" "the-command" "Enter"]
-           (first @sent)))))
+                     (swarmforge/launch-role! {:tmux-socket "sock" :tmux-pane-base-index 0} 1
+                                              {:agent agent :worktree-path (str (fs/path home "wt"))
+                                               :session "swarmforge-coder" :display-name "Coder"}))))]
+    (try
+      (with-user-home home
+        (fn []
+          (launch "grok")
+          (let [codex-config (fs/path (swarmforge/codex-home) "config.toml")]
+            (is (not (fs/exists? claude-config)))
+            (is (not (fs/exists? codex-config)))
+            (launch "deepseek")
+            (is (str/includes? (slurp (str codex-config)) (str (fs/path home "wt")))))
+          (is (not (fs/exists? claude-config)))
+          (launch "claude")
+          (is (true? (get-in (json/parse-string (slurp (str claude-config)))
+                             ["projects" (str (fs/path home "wt")) "hasTrustDialogAccepted"])))))
+      (is (= ["tmux" "-S" "sock" "send-keys" "-t" "swarmforge-coder:Coder.0" "the-command" "Enter"]
+             (first @sent)))
+      (finally
+        (fs/delete-tree home)))))
 
 (deftest swarmforge-entry-points-default-the-project-root-to-the-working-directory
   (is (= "given" (swarmforge/root-arg ["--test-parse" "given"])))

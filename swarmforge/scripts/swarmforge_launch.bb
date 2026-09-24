@@ -130,9 +130,12 @@
       "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
                                     "--profile deepseek "))))
 
+(defn runs-forge-scripts? [ctx row]
+  (or (:definition-project? ctx)
+      (= (str (:worktree-path row)) (str (:working-dir ctx)))))
+
 (defn role-script-dir [ctx row]
-  (if (or (:definition-project? ctx)
-          (= (str (:worktree-path row)) (str (:working-dir ctx))))
+  (if (runs-forge-scripts? ctx row)
     (:script-dir ctx)
     (fs/path (:worktree-path row) "swarmforge" "scripts")))
 
@@ -226,11 +229,16 @@
     (ensure-claude-worktree-trusted! dir)
     (ensure-claude-bypass-permissions-accepted!)))
 
+(def trust-worktree-by-command
+  {"codex" #'ensure-codex-trust!
+   "claude" #'ensure-claude-trust!})
+
+(defn trust-worktree! [agent dir]
+  (when-let [trust! (trust-worktree-by-command (required-command agent))]
+    (trust! dir)))
+
 (defn launch-role! [ctx index row]
-  (when (codex-backed? (:agent row))
-    (ensure-codex-trust! (:worktree-path row)))
-  (when (= "claude" (:agent row))
-    (ensure-claude-trust! (:worktree-path row)))
+  (trust-worktree! (:agent row) (:worktree-path row))
   (let [session (:session row)
         display (:display-name row)
         command (launch-command ctx index row)]
