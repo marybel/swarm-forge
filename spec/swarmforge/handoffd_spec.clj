@@ -1,7 +1,8 @@
 (ns swarmforge.handoffd-spec
   (:require [speclj.core :refer :all]))
 
-(load-file "swarmforge/scripts/handoffd.bb")
+(when-not (find-ns 'handoffd)
+  (load-file "swarmforge/scripts/handoffd.bb"))
 
 (defn validate-header-fields! [headers sender-role]
   ((ns-resolve 'handoffd 'validate-header-fields!) headers sender-role))
