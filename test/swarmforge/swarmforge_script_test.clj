@@ -392,19 +392,20 @@
       (finally
         (fs/delete-tree root)))))
 
+(defn- deepseek-flag-output [flag]
+  (str/trim (:out (run {:dir repo-root} (script "swarmforge.bb") flag "deepseek"))))
+
 (deftest deepseek-backend-is-codex-backed
   ;; Given the deepseek backend runs through the codex CLI under the hood
   ;; When codex-backed? checks it
   ;; Then it reports true, so launch-role! pre-trusts the worktree for it too
-  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-codex-backed" "deepseek")]
-    (is (= "true" (str/trim (:out result))))))
+  (is (= "true" (deepseek-flag-output "--test-codex-backed"))))
 
 (deftest deepseek-backend-requires-codex-binary
   ;; Given the deepseek backend runs through the codex CLI under the hood
   ;; When the dependency-check command is resolved for it
   ;; Then it checks for codex, not a nonexistent deepseek binary
-  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-required-command" "deepseek")]
-    (is (= "codex" (str/trim (:out result))))))
+  (is (= "codex" (deepseek-flag-output "--test-required-command"))))
 
 (deftest swarmforge-accepts-deepseek-as-known-agent
   ;; Given a role configured with backend deepseek
@@ -758,6 +759,13 @@
       (finally
         (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
         (fs/delete-tree root)))))
+(defn- eventually? [pred]
+  (loop [attempts-left 50]
+    (cond
+      (pred) true
+      (zero? attempts-left) false
+      :else (do (Thread/sleep 100) (recur (dec attempts-left))))))
+
 (deftest role-session-pipes-pane-output-to-a-log-file
   ;; Given a tmux socket
   ;; When SwarmForge creates a role session
@@ -775,18 +783,9 @@
           (str log-file))
       (run {:dir root} "tmux" "-S" sock "send-keys" "-t" session "-l" "hello-from-pane")
       (run {:dir root} "tmux" "-S" sock "send-keys" "-t" session "Enter")
-      (let [logged? (loop [attempts-left 50]
-                      (cond
-                        (and (fs/exists? log-file)
-                             (str/includes? (slurp (str log-file)) "hello-from-pane"))
-                        true
-
-                        (zero? attempts-left)
-                        false
-
-                        :else
-                        (do (Thread/sleep 100) (recur (dec attempts-left)))))]
-        (is logged? (str "expected " log-file " to contain the pane's output")))
+      (is (eventually? #(and (fs/exists? log-file)
+                             (str/includes? (slurp (str log-file)) "hello-from-pane")))
+          (str "expected " log-file " to contain the pane's output"))
       (finally
         (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
         (fs/delete-tree root)))))
