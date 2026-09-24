@@ -529,6 +529,10 @@
     (is (= ["tmux" "-S" "sock" "send-keys" "-t" "swarmforge-coder:Coder.0" "the-command" "Enter"]
            (first @sent)))))
 
+(deftest swarmforge-entry-points-default-the-project-root-to-the-working-directory
+  (is (= "given" (swarmforge/root-arg ["--test-parse" "given"])))
+  (is (= (System/getProperty "user.dir") (swarmforge/root-arg ["--test-parse"]))))
+
 (deftest pack-board-helpers
   (is (= "hello" (pack-board/slug "Hello!")))
   (is (= 3 (pack-board/parse-count "3")))

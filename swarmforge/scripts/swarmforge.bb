@@ -507,21 +507,19 @@
     (println (str (boolean (fs/exists? (dashboard-url-file ctx))) " "
                   (boolean (fs/exists? (pack-web-pid-file ctx)))))))
 
+(defn root-arg [args]
+  (or (second args) (System/getProperty "user.dir")))
+
 (defn -main [& args]
   (case (first args)
-    "--test-parse" (test-parse! (or (second args) (System/getProperty "user.dir")))
+    "--test-parse" (test-parse! (root-arg args))
     "--test-required-helpers" (test-required-helpers!)
-    "--test-launch-plan" (test-launch-plan! (or (second args) (System/getProperty "user.dir")))
-    "--test-start-order" (test-start-order! (or (second args) (System/getProperty "user.dir")))
-    "--test-terminal-bridge" (test-terminal-bridge! (or (second args) (System/getProperty "user.dir")) (nth args 2))
-    "--test-launch-command" (apply test-launch-command!
-                                     (or (second args) (System/getProperty "user.dir"))
-                                     (drop 2 args))
-    "--test-role-launch-command" (test-role-launch-command!
-                                 (or (second args) (System/getProperty "user.dir"))
-                                 (nth args 2))
-    "--test-lieutenant-launch-command" (test-lieutenant-launch-command!
-                                        (or (second args) (System/getProperty "user.dir")))
+    "--test-launch-plan" (test-launch-plan! (root-arg args))
+    "--test-start-order" (test-start-order! (root-arg args))
+    "--test-terminal-bridge" (test-terminal-bridge! (root-arg args) (nth args 2))
+    "--test-launch-command" (apply test-launch-command! (root-arg args) (drop 2 args))
+    "--test-role-launch-command" (test-role-launch-command! (root-arg args) (nth args 2))
+    "--test-lieutenant-launch-command" (test-lieutenant-launch-command! (root-arg args))
     "--test-install-hooks" (test-install-hooks! (second args))
     "--test-sync-worktrees" (test-sync-worktrees! (second args))
     "--remove-hooks" (remove-hooks! (second args))
