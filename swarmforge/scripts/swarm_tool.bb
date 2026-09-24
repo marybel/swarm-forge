@@ -31,7 +31,7 @@
    "mutate4go" {:source "github.com/unclebob/mutate4go" :bb-task "mutate4go"}
    "crap4java" {:source "github.com/unclebob/crap4java" :bb-task "crap4java"}
    "dry4java" {:source "github.com/unclebob/dry4java" :bb-task "dry4java"}
-   "mutate4java" {:source "github.com/unclebob/mutate4java" :bb-task "mutate4java"}})
+   "mutate4java" {:source "github.com/unclebob/mutate4java" :maven-build true}})
 
 (def usage-text
   (str "Usage:\n"
@@ -111,11 +111,11 @@
     (when-not (zero? (:exit result))
       (exit! 1 (str "Failed to clone " url "\n" (:err result) (:out result))))))
 
-(defn ensure-source! [root source]
+(defn ensure-source! [root source sentinel]
   (let [dir (source-dir root source)]
-    (when-not (fs/exists? (fs/path dir "bb.edn"))
+    (when-not (fs/exists? (fs/path dir sentinel))
       (when (System/getenv "SWARMFORGE_TOOL_SRC")
-        (exit! 1 (str "SWARMFORGE_TOOL_SRC is missing bb.edn: " dir)))
+        (exit! 1 (str "SWARMFORGE_TOOL_SRC is missing " sentinel ": " dir)))
       (clone-source! dir source))
     dir))
 
@@ -190,13 +190,53 @@
           (when (seq args) (str " " args))
           " \"$@\"\n"))))
 
+(defn strip-mutate4java-parent [pom-content]
+  (str/replace pom-content #"(?s)\s*<parent>.*?</parent>\n?" "\n"))
+
+(defn inline-mutate4java-coordinates [pom-content]
+  (str/replace pom-content
+               #"<artifactId>mutate4java</artifactId>"
+               (str "<groupId>com.unclebob</groupId>\n"
+                    "  <version>0.1.0-SNAPSHOT</version>\n"
+                    "  <artifactId>mutate4java</artifactId>")))
+
+(defn patch-mutate4java-pom! [dir]
+  (let [pom (fs/path dir "pom.xml")
+        content (slurp (str pom))]
+    (when (str/includes? content "<parent>")
+      (spit (str pom) (-> content strip-mutate4java-parent inline-mutate4java-coordinates)))))
+
+(defn build-mutate4java! [dir]
+  (let [result (sh/sh "mvn" "-DskipTests" "package" :dir (str dir))]
+    (when-not (zero? (:exit result))
+      (exit! 1 (str "Failed to build mutate4java\n" (:err result) (:out result))))))
+
+(defn write-mutate4java-wrapper! [root dir]
+  (write-wrapper!
+   (wrapper-path root "mutate4java")
+   (str (rewrite-bash "mutate4java")
+        "cd " (sq (str dir)) "\n"
+        "exec java -jar target/mutate4java-0.1.0-SNAPSHOT.jar \"$@\"\n")))
+
+(defn install-maven-build! [root spec]
+  (let [dir (ensure-source! root (:source spec) "pom.xml")]
+    (patch-mutate4java-pom! dir)
+    (build-mutate4java! dir)
+    (write-mutate4java-wrapper! root dir)))
+
 (defn install-one! [tool]
   (let [spec (tool-spec tool)
         root (project-root)
         name (canonical-tool tool)
-        target (if-let [bb-task (:bb-task spec)]
-                 (write-bb-wrapper! root name bb-task
-                                    (ensure-source! root (:source spec)))
+        target (cond
+                 (:maven-build spec)
+                 (install-maven-build! root spec)
+
+                 (:bb-task spec)
+                 (write-bb-wrapper! root name (:bb-task spec)
+                                    (ensure-source! root (:source spec) "bb.edn"))
+
+                 :else
                  (write-mvn-wrapper! root name spec))]
     (println "INSTALLED:" name (str target))))
 
