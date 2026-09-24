@@ -99,50 +99,66 @@
        (extra-args-prefix row)
        (when initial-prompt? prompt)))
 
+(defn claude-cli-command [row prompt-file prompt initial-prompt?]
+  (str (alt-screen-env "claude" row)
+       "claude --append-system-prompt-file " (sq (str prompt-file)) " "
+       (yolo-flag "claude" row) "-n " (sq (str "SwarmForge " (:display-name row))) " "
+       (extra-args-prefix row)
+       (when initial-prompt? prompt)))
+
+(defn copilot-cli-command [row prompt initial-prompt?]
+  (str "copilot -C " (sq (str (:worktree-path row))) " "
+       (no-alt-screen-flag "copilot" row)
+       "--name " (sq (str "SwarmForge " (:display-name row))) " "
+       (yolo-flag "copilot" row) (extra-args-prefix row)
+       (when initial-prompt? (str "-i " prompt))))
+
+(defn grok-cli-command [row prompt initial-prompt?]
+  (str "grok --cwd " (sq (str (:worktree-path row))) " "
+       (grok-permission-prefix row) (extra-args-prefix row)
+       "--minimal --rules " prompt
+       (when initial-prompt? (str " --verbatim " prompt))))
+
+(defn agent-cli-command [row prompt-file prompt]
+  (let [initial-prompt? (not= (:role row) "lieutenant")
+        role-worktree (:worktree-path row)]
+    (case (:agent row)
+      "claude" (claude-cli-command row prompt-file prompt initial-prompt?)
+      "codex" (codex-cli-command role-worktree row initial-prompt? prompt "")
+      "copilot" (copilot-cli-command row prompt initial-prompt?)
+      "grok" (grok-cli-command row prompt initial-prompt?)
+      "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
+                                    "--profile deepseek "))))
+
+(defn role-script-dir [ctx row]
+  (if (or (:definition-project? ctx)
+          (= (str (:worktree-path row)) (str (:working-dir ctx))))
+    (:script-dir ctx)
+    (fs/path (:worktree-path row) "swarmforge" "scripts")))
+
+(defn launch-preamble [ctx row]
+  (str "export SWARMFORGE_ROLE=" (sq (:role row))
+       " && export PATH=" (sq (str (fs/path (:working-dir ctx) ".swarmforge" "bin")))
+       ":" (sq (str (role-script-dir ctx row))) ":$PATH"
+       " && cd " (sq (str (:worktree-path row)))
+       " && "))
+
+(defn cleanup-on-exit-suffix [ctx]
+  (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
+       " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
+       " " (sq (:tmux-socket ctx))
+       " " (sq (str (:window-ids-file ctx)))
+       (apply str (map #(str " " (sq (:session %))) (:roles ctx)))
+       " >/dev/null 2>&1 &!; exit $exit_code"))
+
 (defn launch-command [ctx index row]
   (let [role (:role row)
-        agent (:agent row)
-        display (:display-name row)
-        role-worktree (:worktree-path row)
-        role-script-dir (if (or (:definition-project? ctx)
-                                (= (str role-worktree) (str (:working-dir ctx))))
-                          (:script-dir ctx)
-                          (fs/path role-worktree "swarmforge" "scripts"))
         prompt-file (fs/path (:prompts-dir ctx) (str role ".md"))
-        tool-bin (fs/path (:working-dir ctx) ".swarmforge" "bin")
-        prompt (str "\"$(cat " (sq (str prompt-file)) ")\"")
-        initial-prompt? (not= role "lieutenant")
-        base (str "export SWARMFORGE_ROLE=" (sq role)
-                  " && export PATH=" (sq (str tool-bin)) ":" (sq (str role-script-dir)) ":$PATH"
-                  " && cd " (sq (str role-worktree))
-                  " && ")]
+        prompt (str "\"$(cat " (sq (str prompt-file)) ")\"")]
     (write-agent-instruction-file! ctx role prompt-file (last-pack-role? ctx role))
-    (cond-> (str base
-                (case agent
-                  "claude" (str (alt-screen-env agent row)
-                                "claude --append-system-prompt-file " (sq (str prompt-file)) " "
-                                (yolo-flag agent row) "-n " (sq (str "SwarmForge " display)) " "
-                                (extra-args-prefix row)
-                                (when initial-prompt? prompt))
-                  "codex" (codex-cli-command role-worktree row initial-prompt? prompt "")
-                  "copilot" (str "copilot -C " (sq (str role-worktree)) " "
-                                 (no-alt-screen-flag agent row)
-                                 "--name " (sq (str "SwarmForge " display)) " "
-                                 (yolo-flag agent row) (extra-args-prefix row)
-                                 (when initial-prompt? (str "-i " prompt)))
-                  "grok" (str "grok --cwd " (sq (str role-worktree)) " "
-                              (grok-permission-prefix row) (extra-args-prefix row)
-                              "--minimal --rules " prompt
-                              (when initial-prompt? (str " --verbatim " prompt)))
-                  "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
-                                                 "--profile deepseek ")))
-      (= index 0)
-      (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
-           " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
-           " " (sq (:tmux-socket ctx))
-           " " (sq (str (:window-ids-file ctx)))
-           (apply str (map #(str " " (sq (:session %))) (:roles ctx)))
-           " >/dev/null 2>&1 &!; exit $exit_code"))))
+    (str (launch-preamble ctx row)
+         (agent-cli-command row prompt-file prompt)
+         (when (= index 0) (cleanup-on-exit-suffix ctx)))))
 
 (defn codex-home []
   (or (not-empty (System/getenv "CODEX_HOME"))
