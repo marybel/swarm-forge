@@ -8,8 +8,8 @@
 (defn stage-copies! [src-root dest-root]
   ((ns-resolve 'dry-stage 'stage-copies!) src-root dest-root))
 
-(defn exit-code [report]
-  ((ns-resolve 'dry-stage 'exit-code) report))
+(defn exit-code [candidates]
+  ((ns-resolve 'dry-stage 'exit-code) candidates))
 
 (defn write-file! [path text]
   (fs/create-dirs (fs/parent path))
@@ -50,9 +50,9 @@
 
 (describe "exit-code"
   (it "is zero when dry4clj reports no candidates"
-    (should= 0 (exit-code {:candidates []})))
+    (should= 0 (exit-code [])))
 
   (it "is non-zero when dry4clj reports any candidate"
-    (should= 1 (exit-code {:candidates [{:score 0.9}]}))))
+    (should= 1 (exit-code [{:score 0.9}]))))
 
 (run-specs)

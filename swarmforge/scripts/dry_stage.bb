@@ -12,5 +12,5 @@
     (fs/create-dirs (fs/parent dest))
     (fs/copy src dest)))
 
-(defn exit-code [{:keys [candidates]}]
+(defn exit-code [candidates]
   (if (seq candidates) 1 0))

@@ -107,4 +107,4 @@
                    _ (dry-stage/stage-copies! "swarmforge/scripts" dir)
                    candidates (dry/find-duplicates (dry/parse-args (concat *command-line-args* [dir])))]
                ((var dry/print-text) candidates)
-               (System/exit (dry-stage/exit-code {:candidates candidates})))}}}
+               (System/exit (dry-stage/exit-code candidates)))}}}
