@@ -315,7 +315,7 @@
                           (pane-log-file-for ctx (:role row))))
   (write-tmux-env-file! ctx))
 
-(defn run-main! [root]
+(defn boot-forge! [root]
   (check-dependency! "tmux")
   (check-dependency! "git")
   (check-dependency! "bb")
@@ -335,10 +335,14 @@
         (boot-sessions! ctx)
         (sync-worktree-scripts! ctx)
         (start-handoff-daemon! ctx)
-        (start-pack-web! ctx)
-        (launch-roles! ctx)
-        (announce-ready! ctx)
-        (open-terminal-surfaces! ctx)))))
+        ctx))))
+
+(defn run-main! [root]
+  (let [ctx (boot-forge! root)]
+    (start-pack-web! ctx)
+    (launch-roles! ctx)
+    (announce-ready! ctx)
+    (open-terminal-surfaces! ctx)))
 
 (defn parse-lieutenant-config [ctx]
   (let [file (:config-file ctx)
@@ -411,27 +415,9 @@
     (open-terminal-surfaces! ctx)))
 
 (defn run-project! [root]
-  (check-dependency! "tmux")
-  (check-dependency! "git")
-  (check-dependency! "bb")
-  (let [ctx (-> (context root)
-                detect-tmux-base-indexes)]
-    (initialize-git-repo! ctx)
-    (ensure-runtime-git-excludes! ctx)
-    (install-commit-msg-hook! ctx)
-    (let [ctx (prepare-ctx ctx)]
-      (check-backend-dependencies! ctx)
-      (prepare-workspace! ctx)
-      (prepare-worktrees! ctx)
-      (prepare-handoff-dirs! ctx)
-      (let [ctx (assoc ctx :terminal-backend (detect-terminal-backend))]
-        (stop-handoff-daemon! ctx)
-        (kill-existing-sessions! ctx)
-        (boot-sessions! ctx)
-        (sync-worktree-scripts! ctx)
-        (start-handoff-daemon! ctx)
-        (launch-roles! ctx)
-        (announce-ready! ctx)))))
+  (let [ctx (boot-forge! root)]
+    (launch-roles! ctx)
+    (announce-ready! ctx)))
 
 (defn test-terminal-bridge! [root backend]
   (let [local-script-dir (fs/path root "swarmforge" "scripts")
