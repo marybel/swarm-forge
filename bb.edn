@@ -96,4 +96,15 @@
         :task (apply core/-main
                      "--source-root" "swarmforge/scripts"
                      "--coverage-command" "bb coverage:bb"
-                     *command-line-args*)}}}
+                     *command-line-args*)}
+  dry {:doc "Run dry4clj on .clj copies of the Babashka scripts; exit non-zero on any candidate"
+       :extra-deps {io.github.unclebob/dry4clj
+                    {:git/url "https://github.com/unclebob/dry4clj.git"
+                     :git/sha "5994ef2bcaaae8d12bcd0afb4f091ae09083228c"}}
+       :requires ([dry4clj.core :as dry]
+                  [dry-stage])
+       :task (let [dir "tmp/dry"
+                   _ (dry-stage/stage-copies! "swarmforge/scripts" dir)
+                   candidates (dry/find-duplicates (dry/parse-args (concat *command-line-args* [dir])))]
+               ((var dry/print-text) candidates)
+               (System/exit (dry-stage/exit-code {:candidates candidates})))}}}
