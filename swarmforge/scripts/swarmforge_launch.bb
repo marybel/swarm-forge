@@ -194,17 +194,21 @@
                      (str (fs/path (System/getProperty "user.home") ".claude")))
                 "settings.json")))
 
+(defn read-json-file [file]
+  (if (fs/exists? file)
+    (json/parse-string (slurp (str file)))
+    {}))
+
+(defn write-json-file! [file data]
+  (fs/create-dirs (fs/parent file))
+  (spit (str file) (json/generate-string data)))
+
 (defn ensure-claude-worktree-trusted! [dir]
   (let [cfg (claude-config-file)
-        dir-key (str (fs/absolutize dir))
-        config (if (fs/exists? cfg) (json/parse-string (slurp cfg)) {})
-        project (get-in config ["projects" dir-key] {})]
-    (when-not (get project "hasTrustDialogAccepted")
-      (fs/create-dirs (fs/parent cfg))
-      (spit (str cfg)
-            (json/generate-string
-             (assoc-in config ["projects" dir-key]
-                       (assoc project "hasTrustDialogAccepted" true)))))))
+        config (read-json-file cfg)
+        trust-path ["projects" (str (fs/absolutize dir)) "hasTrustDialogAccepted"]]
+    (when-not (get-in config trust-path)
+      (write-json-file! cfg (assoc-in config trust-path true)))))
 
 ;; The bypass-permissions disclaimer's "Yes, I accept" writes
 ;; skipDangerousModePermissionPrompt into ~/.claude/settings.json (the
@@ -212,12 +216,10 @@
 ;; key is only consulted by a one-time migration this install never triggered.
 (defn ensure-claude-bypass-permissions-accepted! []
   (let [settings-file (claude-settings-file)
-        settings (if (fs/exists? settings-file) (json/parse-string (slurp settings-file)) {})]
+        settings (read-json-file settings-file)]
     (when-not (get settings "skipDangerousModePermissionPrompt")
-      (fs/create-dirs (fs/parent settings-file))
-      (spit (str settings-file)
-            (json/generate-string
-             (assoc settings "skipDangerousModePermissionPrompt" true))))))
+      (write-json-file! settings-file
+                        (assoc settings "skipDangerousModePermissionPrompt" true)))))
 
 (defn ensure-claude-trust! [dir]
   (when-not (str/blank? (str dir))
