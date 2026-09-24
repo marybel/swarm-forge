@@ -58,25 +58,36 @@
                         (println "  cd test/dashboard && npx playwright install chromium"))
                       (System/exit (or (:exit result) 1)))))
                 (System/exit 0))}
-  coverage:bb {:doc "Cover Babashka scripts with Cloverage"
-               :extra-deps {io.github.unclebob/crap4clj
-                            {:git/url "https://github.com/unclebob/crap4clj.git"
-                             :git/sha "e068673a852a8142323ac680fa3366de65bc2227"}
-                            cloverage/cloverage
-                            {:git/url "https://github.com/cloverage/cloverage.git"
-                             :git/sha "61e3cac426e9907a9dd01c37597f85c71a57ff90"
-                             :deps/root "cloverage"}
-                            speclj/speclj {:mvn/version "3.13.0"}}
-               :requires ([crap4clj.bb-coverage :as coverage])
-               :task (apply coverage/-main
-                            "-p" "swarmforge/scripts"
-                            "-s" "spec"
-                            "-r" "speclj"
-                            "--lcov"
-                            "--no-html"
-                            "--no-text"
-                            "--no-emma-xml"
-                            *command-line-args*)}
+  coverage:pass {:doc "One Cloverage pass: `bb coverage:pass test` (clojure.test) or `bb coverage:pass spec` (Speclj)"
+                 :extra-deps {io.github.unclebob/crap4clj
+                              {:git/url "https://github.com/unclebob/crap4clj.git"
+                               :git/sha "e068673a852a8142323ac680fa3366de65bc2227"}
+                              cloverage/cloverage
+                              {:git/url "https://github.com/cloverage/cloverage.git"
+                               :git/sha "61e3cac426e9907a9dd01c37597f85c71a57ff90"
+                               :deps/root "cloverage"}
+                              speclj/speclj {:mvn/version "3.13.0"}}
+                 :requires ([crap4clj.bb-coverage :as coverage])
+                 :task (let [[pass & more] *command-line-args*
+                             pass-args {"test" ["-s" "test" "-r" "clojure.test"
+                                                "--test-ns-regex" "swarmforge\\.coverage-in-process-test"]
+                                        "spec" ["-s" "spec" "-r" "speclj"]}]
+                         (apply coverage/-main
+                                "-p" "swarmforge/scripts"
+                                "-o" (str "target/coverage/" pass)
+                                "--lcov"
+                                "--no-html"
+                                "--no-text"
+                                "--no-emma-xml"
+                                (concat (pass-args pass) more)))}
+  coverage:bb {:doc "Cover Babashka scripts with Cloverage: clojure.test and Speclj passes, LCOV merged"
+               :requires ([babashka.process :refer [shell]]
+                          [lcov-merge])
+               :task (let [passes ["test" "spec"]]
+                       (doseq [pass passes]
+                         (apply shell "bb" "coverage:pass" pass *command-line-args*))
+                       (lcov-merge/merge-files! "target/coverage/lcov.info"
+                                                (map (fn [pass] (str "target/coverage/" pass "/lcov.info")) passes)))}
   crap {:doc "Run crap4clj on Babashka scripts"
         :extra-deps {io.github.unclebob/crap4clj
                      {:git/url "https://github.com/unclebob/crap4clj.git"
