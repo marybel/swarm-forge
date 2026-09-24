@@ -11,12 +11,17 @@ only scans `.clj`, `.cljc`, `.cljs`, and `.cljd` files, so pointing it
 straight at `.bb` sources silently finds nothing and reports a false-clean
 result.
 
-Run CRAP via crap4clj, using this repo's `bb crap` task (bb.edn:79-86) to
+Run CRAP via crap4clj, using this repo's `bb crap` task (bb.edn:91-99) to
 invoke it: crap4clj.core with `--source-root swarmforge/scripts` and
-`--coverage-command "bb coverage:bb"`, where `coverage:bb` runs crap4clj's
-own cloverage wrapper with the Speclj runner (`-s spec -r speclj`) so
-Speclj specs under `spec/` count toward each function's CRAP score. `bb crap`
-is crap4clj itself invoked through Babashka's task runner, not a homegrown
+`--coverage-command "bb coverage:bb"`. `coverage:bb` makes two crap4clj
+cloverage passes (`bb coverage:pass test`: `-s test -r clojure.test`, scoped
+with `--test-ns-regex` to `coverage-in-process-test` so subprocess-covered
+code isn't miscounted as untested; `bb coverage:pass spec`: `-s spec -r
+speclj`), each writing its own LCOV under `target/coverage/<pass>/`, then
+merges them with `swarmforge/scripts/lcov_merge.bb` into
+`target/coverage/lcov.info`. Both the clojure.test suite and the Speclj
+specs under `spec/` count toward each function's CRAP score. `bb crap` is
+crap4clj itself invoked through Babashka's task runner, not a homegrown
 proxy for it.
 
 Keep the existing `test/*.clj` clojure.test suite as-is; it originates
