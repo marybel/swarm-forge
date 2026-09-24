@@ -649,6 +649,7 @@
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
+
 (defn- ensure-claude-trust! [root env worktree]
   (run {:dir root :env (merge {"PATH" (System/getenv "PATH")
                                "GIT_CONFIG_NOSYSTEM" "1"}
@@ -656,6 +657,7 @@
        (script "swarmforge.bb")
        "--test-ensure-claude-trust"
        worktree))
+
 (deftest swarmforge-trusts-workspace-for-claude-launches
   ;; Given a claude worktree with no .claude.json
   ;; When startup ensures trust
@@ -759,6 +761,7 @@
       (finally
         (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
         (fs/delete-tree root)))))
+
 (defn- eventually? [pred]
   (loop [attempts-left 50]
     (cond
