@@ -5,11 +5,12 @@ That includes constitution articles, role prompts, Tool Startup, and generated
 instruction files. Prompt wording is not production behavior to pin with
 `str/includes?`, Gherkin, or any other automated check.
 
-Run dry4clj on Babashka scripts by making `.clj` copies of the `.bb` files
-under `./tmp/dry` first, then running dry4clj against those copies. dry4clj
+Run dry4clj on Babashka scripts with this repo's `bb dry` task. dry4clj
 only scans `.clj`, `.cljc`, `.cljs`, and `.cljd` files, so pointing it
 straight at `.bb` sources silently finds nothing and reports a false-clean
-result.
+result. `bb dry` stages `.clj` copies of the `.bb` files under
+`swarmforge/scripts` in `./tmp/dry`, runs dry4clj on those copies, prints
+the findings, and exits non-zero when it finds any duplication candidate.
 
 Run CRAP via crap4clj, using this repo's `bb crap` task (bb.edn:91-99) to
 invoke it: crap4clj.core with `--source-root swarmforge/scripts` and
