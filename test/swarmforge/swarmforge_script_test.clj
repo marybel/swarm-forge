@@ -648,6 +648,13 @@
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
+(defn- ensure-claude-trust! [root env worktree]
+  (run {:dir root :env (merge {"PATH" (System/getenv "PATH")
+                               "GIT_CONFIG_NOSYSTEM" "1"}
+                              env)}
+       (script "swarmforge.bb")
+       "--test-ensure-claude-trust"
+       worktree))
 (deftest swarmforge-trusts-workspace-for-claude-launches
   ;; Given a claude worktree with no .claude.json
   ;; When startup ensures trust
@@ -658,12 +665,7 @@
         wt (str (fs/absolutize root))]
     (try
       (doseq [_ [1 2]]
-        (run {:dir root :env {"CLAUDE_CONFIG_FILE" (str cfg-file)
-                              "PATH" (System/getenv "PATH")
-                              "GIT_CONFIG_NOSYSTEM" "1"}}
-             (script "swarmforge.bb")
-             "--test-ensure-claude-trust"
-             wt))
+        (ensure-claude-trust! root {"CLAUDE_CONFIG_FILE" (str cfg-file)} wt))
       (let [cfg (json/parse-string (slurp (str cfg-file)))]
         (is (= true (get-in cfg ["projects" wt "hasTrustDialogAccepted"]))))
       (finally
@@ -678,12 +680,7 @@
         settings-file (fs/path config-dir "settings.json")
         wt (str (fs/absolutize root))]
     (try
-      (run {:dir root :env {"CLAUDE_CONFIG_DIR" (str config-dir)
-                            "PATH" (System/getenv "PATH")
-                            "GIT_CONFIG_NOSYSTEM" "1"}}
-           (script "swarmforge.bb")
-           "--test-ensure-claude-trust"
-           wt)
+      (ensure-claude-trust! root {"CLAUDE_CONFIG_DIR" (str config-dir)} wt)
       (let [settings (json/parse-string (slurp (str settings-file)))]
         (is (= true (get settings "skipDangerousModePermissionPrompt"))))
       (finally
@@ -699,12 +696,7 @@
         wt (str (fs/absolutize root))]
     (try
       (write-file settings-file (json/generate-string {"theme" "dark"}))
-      (run {:dir root :env {"CLAUDE_CONFIG_DIR" (str config-dir)
-                            "PATH" (System/getenv "PATH")
-                            "GIT_CONFIG_NOSYSTEM" "1"}}
-           (script "swarmforge.bb")
-           "--test-ensure-claude-trust"
-           wt)
+      (ensure-claude-trust! root {"CLAUDE_CONFIG_DIR" (str config-dir)} wt)
       (let [settings (json/parse-string (slurp (str settings-file)))]
         (is (= "dark" (get settings "theme")))
         (is (= true (get settings "skipDangerousModePermissionPrompt"))))
