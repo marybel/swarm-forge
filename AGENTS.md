@@ -14,10 +14,10 @@ result.
 Run CRAP via crap4clj, using this repo's `bb crap` task (bb.edn:79-86) to
 invoke it: crap4clj.core with `--source-root swarmforge/scripts` and
 `--coverage-command "bb coverage:bb"`, where `coverage:bb` runs crap4clj's
-own cloverage wrapper scoped with `--test-ns-regex` to
-`coverage-in-process-test` so subprocess-covered code isn't miscounted as
-untested. `bb crap` is crap4clj itself invoked through Babashka's task
-runner, not a homegrown proxy for it.
+own cloverage wrapper with the Speclj runner (`-s spec -r speclj`) so
+Speclj specs under `spec/` count toward each function's CRAP score. `bb crap`
+is crap4clj itself invoked through Babashka's task runner, not a homegrown
+proxy for it.
 
 Keep the existing `test/*.clj` clojure.test suite as-is; it originates
 upstream, not from this fork. Write any new test as a Speclj spec, per the
