@@ -99,50 +99,69 @@
        (extra-args-prefix row)
        (when initial-prompt? prompt)))
 
+(defn claude-cli-command [row prompt-file prompt initial-prompt?]
+  (str (alt-screen-env "claude" row)
+       "claude --append-system-prompt-file " (sq (str prompt-file)) " "
+       (yolo-flag "claude" row) "-n " (sq (str "SwarmForge " (:display-name row))) " "
+       (extra-args-prefix row)
+       (when initial-prompt? prompt)))
+
+(defn copilot-cli-command [row prompt initial-prompt?]
+  (str "copilot -C " (sq (str (:worktree-path row))) " "
+       (no-alt-screen-flag "copilot" row)
+       "--name " (sq (str "SwarmForge " (:display-name row))) " "
+       (yolo-flag "copilot" row) (extra-args-prefix row)
+       (when initial-prompt? (str "-i " prompt))))
+
+(defn grok-cli-command [row prompt initial-prompt?]
+  (str "grok --cwd " (sq (str (:worktree-path row))) " "
+       (grok-permission-prefix row) (extra-args-prefix row)
+       "--minimal --rules " prompt
+       (when initial-prompt? (str " --verbatim " prompt))))
+
+(defn agent-cli-command [row prompt-file prompt]
+  (let [initial-prompt? (not= (:role row) "lieutenant")
+        role-worktree (:worktree-path row)]
+    (case (:agent row)
+      "claude" (claude-cli-command row prompt-file prompt initial-prompt?)
+      "codex" (codex-cli-command role-worktree row initial-prompt? prompt "")
+      "copilot" (copilot-cli-command row prompt initial-prompt?)
+      "grok" (grok-cli-command row prompt initial-prompt?)
+      "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
+                                    "--profile deepseek "))))
+
+(defn runs-forge-scripts? [ctx row]
+  (or (:definition-project? ctx)
+      (= (str (:worktree-path row)) (str (:working-dir ctx)))))
+
+(defn role-script-dir [ctx row]
+  (if (runs-forge-scripts? ctx row)
+    (:script-dir ctx)
+    (fs/path (:worktree-path row) "swarmforge" "scripts")))
+
+(defn launch-preamble [ctx row]
+  (str "export SWARMFORGE_ROLE=" (sq (:role row))
+       " && export PATH=" (sq (str (fs/path (:working-dir ctx) ".swarmforge" "bin")))
+       ":" (sq (str (role-script-dir ctx row))) ":$PATH"
+       " && cd " (sq (str (:worktree-path row)))
+       " && "))
+
+(defn cleanup-on-exit-suffix [ctx]
+  (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
+       " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
+       " " (sq (:tmux-socket ctx))
+       " " (sq (str (:window-ids-file ctx)))
+       (apply str (map #(str " " (sq (:session %))) (:roles ctx)))
+       " >/dev/null 2>&1 &!; exit $exit_code"))
+
 (defn launch-command [ctx index row]
   (let [role (:role row)
-        agent (:agent row)
-        display (:display-name row)
-        role-worktree (:worktree-path row)
-        role-script-dir (if (or (:definition-project? ctx)
-                                (= (str role-worktree) (str (:working-dir ctx))))
-                          (:script-dir ctx)
-                          (fs/path role-worktree "swarmforge" "scripts"))
         prompt-file (fs/path (:prompts-dir ctx) (str role ".md"))
-        tool-bin (fs/path (:working-dir ctx) ".swarmforge" "bin")
-        prompt (str "\"$(cat " (sq (str prompt-file)) ")\"")
-        initial-prompt? (not= role "lieutenant")
-        base (str "export SWARMFORGE_ROLE=" (sq role)
-                  " && export PATH=" (sq (str tool-bin)) ":" (sq (str role-script-dir)) ":$PATH"
-                  " && cd " (sq (str role-worktree))
-                  " && ")]
+        prompt (str "\"$(cat " (sq (str prompt-file)) ")\"")]
     (write-agent-instruction-file! ctx role prompt-file (last-pack-role? ctx role))
-    (cond-> (str base
-                (case agent
-                  "claude" (str (alt-screen-env agent row)
-                                "claude --append-system-prompt-file " (sq (str prompt-file)) " "
-                                (yolo-flag agent row) "-n " (sq (str "SwarmForge " display)) " "
-                                (extra-args-prefix row)
-                                (when initial-prompt? prompt))
-                  "codex" (codex-cli-command role-worktree row initial-prompt? prompt "")
-                  "copilot" (str "copilot -C " (sq (str role-worktree)) " "
-                                 (no-alt-screen-flag agent row)
-                                 "--name " (sq (str "SwarmForge " display)) " "
-                                 (yolo-flag agent row) (extra-args-prefix row)
-                                 (when initial-prompt? (str "-i " prompt)))
-                  "grok" (str "grok --cwd " (sq (str role-worktree)) " "
-                              (grok-permission-prefix row) (extra-args-prefix row)
-                              "--minimal --rules " prompt
-                              (when initial-prompt? (str " --verbatim " prompt)))
-                  "deepseek" (codex-cli-command role-worktree row initial-prompt? prompt
-                                                 "--profile deepseek ")))
-      (= index 0)
-      (str "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND=" (sq (:terminal-backend ctx))
-           " nohup " (sq (str (fs/path (:script-dir ctx) "swarm-cleanup.sh")))
-           " " (sq (:tmux-socket ctx))
-           " " (sq (str (:window-ids-file ctx)))
-           (apply str (map #(str " " (sq (:session %))) (:roles ctx)))
-           " >/dev/null 2>&1 &!; exit $exit_code"))))
+    (str (launch-preamble ctx row)
+         (agent-cli-command row prompt-file prompt)
+         (when (= index 0) (cleanup-on-exit-suffix ctx)))))
 
 (defn codex-home []
   (or (not-empty (System/getenv "CODEX_HOME"))
@@ -178,17 +197,21 @@
                      (str (fs/path (System/getProperty "user.home") ".claude")))
                 "settings.json")))
 
+(defn read-json-file [file]
+  (if (fs/exists? file)
+    (json/parse-string (slurp (str file)))
+    {}))
+
+(defn write-json-file! [file data]
+  (fs/create-dirs (fs/parent file))
+  (spit (str file) (json/generate-string data)))
+
 (defn ensure-claude-worktree-trusted! [dir]
   (let [cfg (claude-config-file)
-        dir-key (str (fs/absolutize dir))
-        config (if (fs/exists? cfg) (json/parse-string (slurp cfg)) {})
-        project (get-in config ["projects" dir-key] {})]
-    (when-not (get project "hasTrustDialogAccepted")
-      (fs/create-dirs (fs/parent cfg))
-      (spit (str cfg)
-            (json/generate-string
-             (assoc-in config ["projects" dir-key]
-                       (assoc project "hasTrustDialogAccepted" true)))))))
+        config (read-json-file cfg)
+        trust-path ["projects" (str (fs/absolutize dir)) "hasTrustDialogAccepted"]]
+    (when-not (get-in config trust-path)
+      (write-json-file! cfg (assoc-in config trust-path true)))))
 
 ;; The bypass-permissions disclaimer's "Yes, I accept" writes
 ;; skipDangerousModePermissionPrompt into ~/.claude/settings.json (the
@@ -196,23 +219,26 @@
 ;; key is only consulted by a one-time migration this install never triggered.
 (defn ensure-claude-bypass-permissions-accepted! []
   (let [settings-file (claude-settings-file)
-        settings (if (fs/exists? settings-file) (json/parse-string (slurp settings-file)) {})]
+        settings (read-json-file settings-file)]
     (when-not (get settings "skipDangerousModePermissionPrompt")
-      (fs/create-dirs (fs/parent settings-file))
-      (spit (str settings-file)
-            (json/generate-string
-             (assoc settings "skipDangerousModePermissionPrompt" true))))))
+      (write-json-file! settings-file
+                        (assoc settings "skipDangerousModePermissionPrompt" true)))))
 
 (defn ensure-claude-trust! [dir]
   (when-not (str/blank? (str dir))
     (ensure-claude-worktree-trusted! dir)
     (ensure-claude-bypass-permissions-accepted!)))
 
+(def trust-worktree-by-command
+  {"codex" #'ensure-codex-trust!
+   "claude" #'ensure-claude-trust!})
+
+(defn trust-worktree! [agent dir]
+  (when-let [trust! (trust-worktree-by-command (required-command agent))]
+    (trust! dir)))
+
 (defn launch-role! [ctx index row]
-  (when (codex-backed? (:agent row))
-    (ensure-codex-trust! (:worktree-path row)))
-  (when (= "claude" (:agent row))
-    (ensure-claude-trust! (:worktree-path row)))
+  (trust-worktree! (:agent row) (:worktree-path row))
   (let [session (:session row)
         display (:display-name row)
         command (launch-command ctx index row)]

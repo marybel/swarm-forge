@@ -1,5 +1,6 @@
 (ns swarmforge.coverage-in-process-test
   (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [commit-msg-hook]
@@ -293,6 +294,256 @@
   ;; disabled" case is covered by swarmforge-sleep-prevention-can-be-disabled.
   (let [prefix (swarmforge/sleep-inhibitor-prefix)]
     (is (or (nil? prefix) (vector? prefix)))))
+
+(deftest swarmforge-resolves-the-command-each-backend-needs
+  (is (= "codex" (swarmforge/required-command "deepseek")))
+  (is (= "claude" (swarmforge/required-command "claude")))
+  (is (swarmforge/codex-backed? "deepseek"))
+  (is (swarmforge/codex-backed? "codex"))
+  (is (not (swarmforge/codex-backed? "claude"))))
+
+(deftest swarmforge-checks-the-command-behind-each-role-backend
+  (let [checked (atom [])]
+    (with-redefs [swarmforge/check-dependency! #(swap! checked conj %)]
+      (swarmforge/check-backend-dependencies!
+       {:roles [{:agent "deepseek"} {:agent "claude"}]}))
+    (is (= ["codex" "claude"] @checked))))
+
+(deftest swarmforge-role-session-pipes-pane-output-to-its-log
+  (let [root (tmp-dir)
+        log-file (fs/path root "logs" "coder.log")
+        calls (atom [])]
+    (try
+      (with-redefs [swarmforge/sh (fn [& args] (swap! calls conj (vec args)))]
+        (swarmforge/create-role-session! {:tmux-socket "sock"} "swarmforge-coder" "Coder" log-file))
+      (is (fs/directory? (fs/parent log-file)))
+      (is (= ["tmux" "-S" "sock" "new-session" "-d" "-s" "swarmforge-coder" "-n" swarmforge/agent-window]
+             (first @calls)))
+      (is (= ["tmux" "-S" "sock" "pipe-pane" "-o" "-t" "swarmforge-coder"
+              (str "cat >> '" log-file "'")]
+             (last @calls)))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarmforge-boot-creates-a-logged-session-per-role
+  (let [created (atom [])
+        env-written (atom false)
+        ctx {:logs-dir (fs/path "state" "logs")
+             :roles [{:role "coder" :session "swarmforge-coder" :display-name "Coder"}
+                     {:role "cleaner" :session "swarmforge-cleaner" :display-name "Cleaner"}]}]
+    (is (= (fs/path "state" "logs" "coder.log") (swarmforge/pane-log-file-for ctx "coder")))
+    (with-redefs [swarmforge/create-role-session! (fn [_ & args] (swap! created conj (vec args)))
+                  swarmforge/write-tmux-env-file! (fn [_] (reset! env-written true))]
+      (with-out-str (swarmforge/boot-sessions! ctx)))
+    (is (= [["swarmforge-coder" "Coder" (fs/path "state" "logs" "coder.log")]
+            ["swarmforge-cleaner" "Cleaner" (fs/path "state" "logs" "cleaner.log")]]
+           @created))
+    (is (true? @env-written))))
+
+(defn- sync-fixture [root]
+  (let [state (fs/path root ".swarmforge")
+        scripts (fs/path root "scripts")
+        worktree (fs/path root ".worktrees" "coder")]
+    (fs/create-dirs state)
+    (fs/create-dirs scripts)
+    (spit (str (fs/path scripts "helper.sh")) "helper\n")
+    (doseq [[_ file-name] swarmforge/worktree-state-files]
+      (spit (str (fs/path state file-name)) (str file-name "\n")))
+    {:worktree worktree
+     :ctx {:working-dir root
+           :script-dir scripts
+           :roles [{:worktree-path worktree}]
+           :sessions-file (fs/path state "sessions.tsv")
+           :roles-file (fs/path state "roles.tsv")
+           :routes-file (fs/path state "routes.tsv")
+           :tmux-socket-file (fs/path state "tmux-socket")
+           :tmux-env-file (fs/path state "tmux-env")}}))
+
+(deftest swarmforge-sync-copies-state-files-into-a-role-worktree
+  (let [root (tmp-dir)
+        {:keys [ctx worktree]} (sync-fixture root)]
+    (try
+      (swarmforge/sync-worktree-state! ctx worktree)
+      (is (fs/directory? (fs/path worktree ".swarmforge" "notify")))
+      (doseq [[_ file-name] swarmforge/worktree-state-files]
+        (is (= (str file-name "\n") (slurp (str (fs/path worktree ".swarmforge" file-name))))))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarmforge-sync-mirrors-scripts-unless-the-project-is-a-definition
+  (let [root (tmp-dir)
+        {:keys [ctx worktree]} (sync-fixture root)
+        mirrored (fs/path worktree "swarmforge" "scripts" "helper.sh")]
+    (try
+      (swarmforge/sync-worktree-scripts! (assoc ctx :definition-project? true))
+      (is (not (fs/exists? mirrored)))
+      (is (fs/exists? (fs/path worktree ".swarmforge" "roles.tsv")))
+      (swarmforge/sync-worktree-scripts! (assoc ctx :definition-project? false
+                                                :roles-dir (fs/path root "roles")
+                                                :swarm-forge-dir (fs/path root "swarmforge")))
+      (is (= "helper\n" (slurp (str mirrored))))
+      (finally
+        (fs/delete-tree root)))))
+
+(defn- launch-ctx [root]
+  (let [state (fs/path root ".swarmforge")]
+    (fs/create-dirs (fs/path state "prompts"))
+    {:working-dir root
+     :script-dir (fs/path "forge" "scripts")
+     :prompts-dir (fs/path state "prompts")
+     :roles-dir (fs/path root "roles")
+     :terminal-backend "none"
+     :tmux-socket "sock"
+     :window-ids-file (fs/path state "window-ids")
+     :roles [{:role "coder" :session "swarmforge-coder"}]}))
+
+(defn- launch-row [agent & [overrides]]
+  (merge {:role "coder" :agent agent :display-name "Coder"
+          :worktree-path "wt" :extra-args nil}
+         overrides))
+
+(deftest swarmforge-launch-command-builds-the-cli-for-each-agent
+  (let [root (tmp-dir)
+        ctx (launch-ctx root)
+        command (fn [agent & [overrides]] (swarmforge/launch-command ctx 1 (launch-row agent overrides)))]
+    (try
+      (let [claude (command "claude")
+            codex (command "codex")
+            copilot (command "copilot")
+            grok (command "grok")
+            deepseek (command "deepseek")]
+        (is (str/includes? claude "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 claude --append-system-prompt-file "))
+        (is (str/includes? claude "--permission-mode bypassPermissions -n 'SwarmForge Coder' "))
+        (is (str/includes? codex "codex -C 'wt' --no-alt-screen --yolo "))
+        (is (not (str/includes? codex "--profile")))
+        (is (str/includes? copilot "copilot -C 'wt' --no-alt-screen --name 'SwarmForge Coder' --yolo -i "))
+        (is (str/includes? grok "grok --cwd 'wt' --permission-mode bypassPermissions --minimal --rules "))
+        (is (str/includes? grok " --verbatim "))
+        (is (str/includes? deepseek "codex -C 'wt' --profile deepseek --no-alt-screen --yolo ")))
+      (is (str/includes? (command "codex" {:extra-args "--foo"}) "--yolo --foo "))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarmforge-launch-command-prefixes-the-role-environment
+  (let [root (tmp-dir)
+        ctx (launch-ctx root)
+        row (launch-row "codex")
+        tool-bin (str (fs/path root ".swarmforge" "bin"))]
+    (try
+      (let [in-worktree (swarmforge/launch-command ctx 1 row)
+            in-forge (swarmforge/launch-command (assoc ctx :definition-project? true) 1 row)
+            at-root (swarmforge/launch-command ctx 1 (assoc row :worktree-path root))]
+        (is (str/starts-with? in-worktree
+                              (str "export SWARMFORGE_ROLE='coder' && export PATH='" tool-bin
+                                   "':'" (fs/path "wt" "swarmforge" "scripts") "':$PATH && cd 'wt' && ")))
+        (is (str/includes? in-forge (str ":'" (fs/path "forge" "scripts") "':$PATH")))
+        (is (str/includes? at-root (str ":'" (fs/path "forge" "scripts") "':$PATH"))))
+      (is (str/includes? (slurp (str (fs/path root ".swarmforge" "prompts" "coder.md")))
+                         ".swarmforge/project-pack/swarmforge/roles/coder.prompt"))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarmforge-launch-command-of-the-first-role-cleans-up-when-it-exits
+  (let [root (tmp-dir)
+        ctx (launch-ctx root)]
+    (try
+      (let [first-role (swarmforge/launch-command ctx 0 (launch-row "codex"))]
+        (is (str/includes? first-role "; exit_code=$?; SWARMFORGE_TERMINAL_BACKEND='none' nohup '"))
+        (is (str/includes? first-role (str (fs/path "forge" "scripts" "swarm-cleanup.sh") "' 'sock' '"
+                                           (fs/path root ".swarmforge" "window-ids") "' 'swarmforge-coder'")))
+        (is (str/ends-with? first-role " >/dev/null 2>&1 &!; exit $exit_code")))
+      (is (not (str/includes? (swarmforge/launch-command ctx 1 (launch-row "codex")) "nohup")))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarmforge-launch-command-gives-the-lieutenant-no-initial-prompt
+  (let [root (tmp-dir)
+        ctx (launch-ctx root)]
+    (try
+      (fs/create-dirs (:roles-dir ctx))
+      (spit (str (fs/path (:roles-dir ctx) "lieutenant.prompt")) "lieutenant\n")
+      (let [command (swarmforge/launch-command ctx 1 (launch-row "codex" {:role "lieutenant"}))]
+        (is (str/ends-with? command "--yolo "))
+        (is (= "lieutenant\n" (slurp (str (fs/path root ".swarmforge" "prompts" "lieutenant.md"))))))
+      (finally
+        (fs/delete-tree root)))))
+
+(defn- with-user-home [home f]
+  (let [previous (System/getProperty "user.home")]
+    (System/setProperty "user.home" (str home))
+    (try (f)
+         (finally (System/setProperty "user.home" previous)))))
+
+(deftest swarmforge-locates-the-claude-config-and-settings-files
+  (let [home (tmp-dir)]
+    (try
+      (with-user-home home
+        (fn []
+          (is (= (or (not-empty (System/getenv "CLAUDE_CONFIG_FILE"))
+                     (str (fs/path home ".claude.json")))
+                 (swarmforge/claude-config-file)))
+          (is (= (str (fs/path (or (not-empty (System/getenv "CLAUDE_CONFIG_DIR"))
+                                   (fs/path home ".claude"))
+                               "settings.json"))
+                 (swarmforge/claude-settings-file)))))
+      (finally
+        (fs/delete-tree home)))))
+
+(deftest swarmforge-claude-trust-accepts-the-worktree-and-the-bypass-disclaimer
+  (let [root (tmp-dir)
+        cfg (fs/path root "claude.json")
+        settings (fs/path root "settings.json")
+        worktree (str (fs/path root "wt"))]
+    (try
+      (with-redefs [swarmforge/claude-config-file (constantly (str cfg))
+                    swarmforge/claude-settings-file (constantly (str settings))]
+        (spit (str settings) "{\"theme\":\"dark\"}")
+        (spit (str cfg) "{\"projects\":{\"other\":{\"hasTrustDialogAccepted\":true}}}")
+        (swarmforge/ensure-claude-trust! worktree)
+        (swarmforge/ensure-claude-trust! worktree)
+        (swarmforge/ensure-claude-trust! ""))
+      (let [config (json/parse-string (slurp (str cfg)))
+            saved (json/parse-string (slurp (str settings)))]
+        (is (= true (get-in config ["projects" worktree "hasTrustDialogAccepted"])))
+        (is (= true (get-in config ["projects" "other" "hasTrustDialogAccepted"])))
+        (is (= {"theme" "dark" "skipDangerousModePermissionPrompt" true} saved)))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarmforge-launch-role-trusts-the-worktree-for-claude-and-codex-backends
+  (let [home (tmp-dir)
+        sent (atom [])
+        claude-config (fs/path home "claude.json")
+        launch (fn [agent]
+                 (with-redefs [swarmforge/claude-config-file (constantly (str claude-config))
+                               swarmforge/claude-settings-file (constantly (str (fs/path home "settings.json")))
+                               swarmforge/launch-command (constantly "the-command")
+                               swarmforge/sh (fn [& args] (swap! sent conj (vec args)))]
+                   (with-out-str
+                     (swarmforge/launch-role! {:tmux-socket "sock" :tmux-pane-base-index 0} 1
+                                              {:agent agent :worktree-path (str (fs/path home "wt"))
+                                               :session "swarmforge-coder" :display-name "Coder"}))))]
+    (try
+      (with-user-home home
+        (fn []
+          (launch "grok")
+          (let [codex-config (fs/path (swarmforge/codex-home) "config.toml")]
+            (is (not (fs/exists? claude-config)))
+            (is (not (fs/exists? codex-config)))
+            (launch "deepseek")
+            (is (str/includes? (slurp (str codex-config)) (str (fs/path home "wt")))))
+          (is (not (fs/exists? claude-config)))
+          (launch "claude")
+          (is (true? (get-in (json/parse-string (slurp (str claude-config)))
+                             ["projects" (str (fs/path home "wt")) "hasTrustDialogAccepted"])))))
+      (is (= ["tmux" "-S" "sock" "send-keys" "-t" "swarmforge-coder:Coder.0" "the-command" "Enter"]
+             (first @sent)))
+      (finally
+        (fs/delete-tree home)))))
+
+(deftest swarmforge-entry-points-default-the-project-root-to-the-working-directory
+  (is (= "given" (swarmforge/root-arg ["--test-parse" "given"])))
+  (is (= (System/getProperty "user.dir") (swarmforge/root-arg ["--test-parse"]))))
 
 (deftest pack-board-helpers
   (is (= "hello" (pack-board/slug "Hello!")))

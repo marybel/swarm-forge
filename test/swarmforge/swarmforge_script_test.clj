@@ -392,19 +392,20 @@
       (finally
         (fs/delete-tree root)))))
 
+(defn- deepseek-flag-output [flag]
+  (str/trim (:out (run {:dir repo-root} (script "swarmforge.bb") flag "deepseek"))))
+
 (deftest deepseek-backend-is-codex-backed
   ;; Given the deepseek backend runs through the codex CLI under the hood
   ;; When codex-backed? checks it
   ;; Then it reports true, so launch-role! pre-trusts the worktree for it too
-  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-codex-backed" "deepseek")]
-    (is (= "true" (str/trim (:out result))))))
+  (is (= "true" (deepseek-flag-output "--test-codex-backed"))))
 
 (deftest deepseek-backend-requires-codex-binary
   ;; Given the deepseek backend runs through the codex CLI under the hood
   ;; When the dependency-check command is resolved for it
   ;; Then it checks for codex, not a nonexistent deepseek binary
-  (let [result (run {:dir repo-root} (script "swarmforge.bb") "--test-required-command" "deepseek")]
-    (is (= "codex" (str/trim (:out result))))))
+  (is (= "codex" (deepseek-flag-output "--test-required-command"))))
 
 (deftest swarmforge-accepts-deepseek-as-known-agent
   ;; Given a role configured with backend deepseek
@@ -648,6 +649,15 @@
       (finally
         (fs/delete-tree root)
         (fs/delete-tree home)))))
+
+(defn- ensure-claude-trust! [root env worktree]
+  (run {:dir root :env (merge {"PATH" (System/getenv "PATH")
+                               "GIT_CONFIG_NOSYSTEM" "1"}
+                              env)}
+       (script "swarmforge.bb")
+       "--test-ensure-claude-trust"
+       worktree))
+
 (deftest swarmforge-trusts-workspace-for-claude-launches
   ;; Given a claude worktree with no .claude.json
   ;; When startup ensures trust
@@ -658,12 +668,7 @@
         wt (str (fs/absolutize root))]
     (try
       (doseq [_ [1 2]]
-        (run {:dir root :env {"CLAUDE_CONFIG_FILE" (str cfg-file)
-                              "PATH" (System/getenv "PATH")
-                              "GIT_CONFIG_NOSYSTEM" "1"}}
-             (script "swarmforge.bb")
-             "--test-ensure-claude-trust"
-             wt))
+        (ensure-claude-trust! root {"CLAUDE_CONFIG_FILE" (str cfg-file)} wt))
       (let [cfg (json/parse-string (slurp (str cfg-file)))]
         (is (= true (get-in cfg ["projects" wt "hasTrustDialogAccepted"]))))
       (finally
@@ -678,12 +683,7 @@
         settings-file (fs/path config-dir "settings.json")
         wt (str (fs/absolutize root))]
     (try
-      (run {:dir root :env {"CLAUDE_CONFIG_DIR" (str config-dir)
-                            "PATH" (System/getenv "PATH")
-                            "GIT_CONFIG_NOSYSTEM" "1"}}
-           (script "swarmforge.bb")
-           "--test-ensure-claude-trust"
-           wt)
+      (ensure-claude-trust! root {"CLAUDE_CONFIG_DIR" (str config-dir)} wt)
       (let [settings (json/parse-string (slurp (str settings-file)))]
         (is (= true (get settings "skipDangerousModePermissionPrompt"))))
       (finally
@@ -699,12 +699,7 @@
         wt (str (fs/absolutize root))]
     (try
       (write-file settings-file (json/generate-string {"theme" "dark"}))
-      (run {:dir root :env {"CLAUDE_CONFIG_DIR" (str config-dir)
-                            "PATH" (System/getenv "PATH")
-                            "GIT_CONFIG_NOSYSTEM" "1"}}
-           (script "swarmforge.bb")
-           "--test-ensure-claude-trust"
-           wt)
+      (ensure-claude-trust! root {"CLAUDE_CONFIG_DIR" (str config-dir)} wt)
       (let [settings (json/parse-string (slurp (str settings-file)))]
         (is (= "dark" (get settings "theme")))
         (is (= true (get settings "skipDangerousModePermissionPrompt"))))
@@ -766,6 +761,14 @@
       (finally
         (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
         (fs/delete-tree root)))))
+
+(defn- eventually? [pred]
+  (loop [attempts-left 50]
+    (cond
+      (pred) true
+      (zero? attempts-left) false
+      :else (do (Thread/sleep 100) (recur (dec attempts-left))))))
+
 (deftest role-session-pipes-pane-output-to-a-log-file
   ;; Given a tmux socket
   ;; When SwarmForge creates a role session
@@ -783,18 +786,9 @@
           (str log-file))
       (run {:dir root} "tmux" "-S" sock "send-keys" "-t" session "-l" "hello-from-pane")
       (run {:dir root} "tmux" "-S" sock "send-keys" "-t" session "Enter")
-      (let [logged? (loop [attempts-left 50]
-                      (cond
-                        (and (fs/exists? log-file)
-                             (str/includes? (slurp (str log-file)) "hello-from-pane"))
-                        true
-
-                        (zero? attempts-left)
-                        false
-
-                        :else
-                        (do (Thread/sleep 100) (recur (dec attempts-left)))))]
-        (is logged? (str "expected " log-file " to contain the pane's output")))
+      (is (eventually? #(and (fs/exists? log-file)
+                             (str/includes? (slurp (str log-file)) "hello-from-pane")))
+          (str "expected " log-file " to contain the pane's output"))
       (finally
         (run {:dir root :ok? false} "tmux" "-S" sock "kill-server")
         (fs/delete-tree root)))))
