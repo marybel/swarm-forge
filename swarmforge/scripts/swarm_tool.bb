@@ -179,7 +179,7 @@
                    (or (:extra-deps spec) {}))]
     (str/join " " (cons main extra))))
 
-(defn write-mvn-wrapper! [root tool spec]
+(defn write-clojure-cli-wrapper! [root tool spec]
   (let [target (wrapper-path root tool)
         deps (str "{:paths [" (edn-paths (:paths spec)) "] :deps {" (edn-deps spec) "}}")
         args (str/join " " (or (:args spec) []))]
@@ -190,6 +190,8 @@
           (when (seq args) (str " " args))
           " \"$@\"\n"))))
 
+(def mutate4java-version "0.1.0-SNAPSHOT")
+
 (defn strip-mutate4java-parent [pom-content]
   (str/replace pom-content #"(?s)\s*<parent>.*?</parent>\n?" "\n"))
 
@@ -197,7 +199,7 @@
   (str/replace pom-content
                #"<artifactId>mutate4java</artifactId>"
                (str "<groupId>com.unclebob</groupId>\n"
-                    "  <version>0.1.0-SNAPSHOT</version>\n"
+                    "  <version>" mutate4java-version "</version>\n"
                     "  <artifactId>mutate4java</artifactId>")))
 
 (defn patch-mutate4java-pom! [dir]
@@ -216,7 +218,7 @@
    (wrapper-path root "mutate4java")
    (str (rewrite-bash "mutate4java")
         "cd " (sq (str dir)) "\n"
-        "exec java -jar target/mutate4java-0.1.0-SNAPSHOT.jar \"$@\"\n")))
+        "exec java -jar target/mutate4java-" mutate4java-version ".jar \"$@\"\n")))
 
 (defn install-maven-build! [root spec]
   (let [dir (ensure-source! root (:source spec) "pom.xml")]
@@ -237,7 +239,7 @@
                                     (ensure-source! root (:source spec) "bb.edn"))
 
                  :else
-                 (write-mvn-wrapper! root name spec))]
+                 (write-clojure-cli-wrapper! root name spec))]
     (println "INSTALLED:" name (str target))))
 
 (defn ensure-tool! [tool]
@@ -246,19 +248,20 @@
     (ensure-tool! dep))
   (install-one! tool))
 
+(defn usage-exit! [status]
+  (usage)
+  (exit! status nil))
+
 (defn -main [& args]
   (when (some #{"--help" "-h"} args)
-    (usage)
-    (System/exit 0))
+    (usage-exit! 0))
   (when (not= 2 (count args))
-    (usage)
-    (System/exit 1))
+    (usage-exit! 1))
   (let [[command tool] args]
     (case command
       "require" (require-tool! tool)
       "ensure" (ensure-tool! tool)
-      (do (usage)
-          (System/exit 1)))))
+      (usage-exit! 1))))
 
 (when (= (str *file*) (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

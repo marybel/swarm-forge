@@ -1,7 +1,6 @@
 (ns swarmforge.swarm-tool-spec
   (:require [babashka.fs :as fs]
             [clojure.java.shell :as sh]
-            [clojure.string :as str]
             [speclj.core :refer :all]))
 
 (when-not (find-ns 'swarm-tool)
@@ -122,4 +121,65 @@
         (with-out-str (swarm-tool/install-one! "mutate4java"))
         (let [body (slurp (str (fs/path root ".swarmforge" "bin" "mutate4java")))]
           (should-contain "exec java -jar" body)
-          (should-not (str/includes? body "exec bb")))))))
+          (should-not-contain "exec bb" body))))))
+
+(defn roles-root! []
+  (let [root (temp-dir)]
+    (fs/create-dirs (fs/path root ".swarmforge"))
+    (spit (str (fs/path root ".swarmforge" "roles.tsv")) "")
+    root))
+
+(defn git-result [out]
+  {:exit 0 :out (str out "\n") :err ""})
+
+(describe "project-root"
+  (it "prefers the parent of the git common dir when it holds roles.tsv"
+    (let [root (roles-root!)]
+      (with-redefs [swarm-tool/git-common-dir (fn [] (str (fs/path root ".git")))]
+        (should= root (swarm-tool/project-root)))))
+
+  (it "falls back to the git toplevel"
+    (let [root (roles-root!)]
+      (with-redefs [swarm-tool/git-common-dir (fn [] (str (fs/path (temp-dir) ".git")))
+                    sh/sh (fn [& _] (git-result root))]
+        (should= root (swarm-tool/project-root)))))
+
+  (it "falls back to the working directory"
+    (let [root (roles-root!)]
+      (with-redefs [swarm-tool/git-common-dir (fn [] nil)
+                    sh/sh (fn [& _] {:exit 128 :out "" :err "not a git repo"})
+                    fs/cwd (fn [] root)]
+        (should= root (swarm-tool/project-root)))))
+
+  (it "exits 1 when no candidate holds roles.tsv"
+    (with-redefs [swarm-tool/git-common-dir (fn [] nil)
+                  sh/sh (fn [& _] (git-result (temp-dir)))
+                  fs/cwd (fn [] (temp-dir))
+                  swarm-tool/exit! exit-thrower]
+      (should= {:status 1 :message "Cannot find SwarmForge project root"}
+               (exit-data swarm-tool/project-root)))))
+
+(defn main-exit [& args]
+  (with-redefs [swarm-tool/exit! exit-thrower
+                swarm-tool/usage (fn [])]
+    (:status (exit-data #(apply swarm-tool/-main args)))))
+
+(describe "-main"
+  (it "exits 0 after printing usage for --help or -h"
+    (should= 0 (main-exit "--help"))
+    (should= 0 (main-exit "ensure" "-h")))
+
+  (it "exits 1 unless given exactly a command and a tool"
+    (should= 1 (main-exit))
+    (should= 1 (main-exit "ensure" "crap4clj" "extra")))
+
+  (it "exits 1 for an unknown command"
+    (should= 1 (main-exit "install" "crap4clj")))
+
+  (it "dispatches require and ensure"
+    (let [calls (atom [])]
+      (with-redefs [swarm-tool/require-tool! #(swap! calls conj [:require %])
+                    swarm-tool/ensure-tool! #(swap! calls conj [:ensure %])]
+        (swarm-tool/-main "require" "dry4clj")
+        (swarm-tool/-main "ensure" "crap4clj"))
+      (should= [[:require "dry4clj"] [:ensure "crap4clj"]] @calls))))
