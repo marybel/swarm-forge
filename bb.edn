@@ -65,16 +65,17 @@
                             cloverage/cloverage
                             {:git/url "https://github.com/cloverage/cloverage.git"
                              :git/sha "61e3cac426e9907a9dd01c37597f85c71a57ff90"
-                             :deps/root "cloverage"}}
+                             :deps/root "cloverage"}
+                            speclj/speclj {:mvn/version "3.13.0"}}
                :requires ([crap4clj.bb-coverage :as coverage])
                :task (apply coverage/-main
                             "-p" "swarmforge/scripts"
-                            "-s" "test"
+                            "-s" "spec"
+                            "-r" "speclj"
                             "--lcov"
                             "--no-html"
                             "--no-text"
                             "--no-emma-xml"
-                            "--test-ns-regex" "swarmforge\\.coverage-in-process-test"
                             *command-line-args*)}
   crap {:doc "Run crap4clj on Babashka scripts"
         :extra-deps {io.github.unclebob/crap4clj
